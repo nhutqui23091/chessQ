@@ -31,11 +31,22 @@ test('asks the engine for the position on the analysis board', async (t) => {
   assert.strictEqual(sent.filter((m) => m.type === 'explorer').length, 0);
 });
 
-test('never asks the engine during a live game', async (t) => {
+test('analyses live while practising against a bot', async (t) => {
+  const { window, sent } = boot(t, 'https://www.chess.com/play/computer',
+    boardHtml(ITALIAN) + '<button data-cy="resign-button">Resign</button>');
+  await wait(450);
+  const analyze = sent.filter((m) => m.type === 'analyze');
+  assert.strictEqual(analyze.length, 1);
+  assert.strictEqual(analyze[0].fen.split(' ')[0], ITALIAN.split(' ')[0]);
+  // It is searching, not refusing.
+  assert.strictEqual(window.document.querySelector('.cmp-status').textContent, 'Đang tính…');
+});
+
+test('never asks the engine in a game against a person', async (t) => {
   const { window, sent } = boot(t, 'https://www.chess.com/play/online', boardHtml(ITALIAN));
   await wait(450);
   assert.strictEqual(sent.filter((m) => m.type === 'analyze').length, 0);
-  assert.match(window.document.querySelector('.cmp-status').textContent, /bàn phân tích/);
+  assert.match(window.document.querySelector('.cmp-status').textContent, /người thật/);
 });
 
 test('refuses even on /analysis while a game is still running', async (t) => {

@@ -5,7 +5,8 @@ Tiện ích Chrome (Manifest V3) cho thế cờ đang mở trên Chess.com, hai 
 * **Thống kê** — tần suất (%) từng nước đi và tỉ lệ thắng/hòa/bại trong hàng
   triệu ván thật, lấy từ [Lichess opening explorer](https://lichess.org/analysis).
 * **Máy phân tích** — điểm số Stockfish cho từng nước, hiện ngay trên ô đích và
-  tô màu theo chất lượng nước đi. **Chỉ chạy trên bàn phân tích** — xem
+  tô màu theo chất lượng nước đi. Chạy **trực tiếp trong ván khi bạn luyện với
+  máy**, và trên bàn phân tích. Không chạy trong ván với người thật — xem
   [Fair play](#fair-play).
 
 Cả hai chế độ đều vẽ huy hiệu lên bàn cờ và liệt kê chi tiết trong một bảng nhỏ
@@ -13,16 +14,21 @@ kéo thả được.
 
 ## Fair play
 
-Máy phân tích **chỉ chạy ở `chess.com/analysis`** (bao gồm Game Review sau ván),
-và tự tắt nếu trang vẫn còn nút đầu hàng của một ván đang diễn ra.
+Ranh giới là **ai ngồi bên kia bàn cờ**.
 
-Lý do: dùng engine trong ván đang đánh là gian lận theo luật Chess.com — nó hại
-đối thủ thật và sẽ khiến tài khoản bị đóng. Giới hạn này là cố ý, không có nút
-tắt. Tiện ích này để **ôn khai cuộc và mổ lại ván đã đấu**, đó cũng là cách thực
-sự lên trình.
+| Trang | Engine | Vì sao |
+|---|---|---|
+| `chess.com/play/computer` | ✅ chạy trực tiếp trong ván | Đối thủ là bot: không ai bị thiệt, elo không đổi. Chess.com cũng tự cho gợi ý ở đây. |
+| `chess.com/analysis` (gồm Game Review) | ✅ | Ôn khai cuộc, mổ lại ván đã đấu. |
+| `/play/online`, `/game/live/…`, `/game/daily/…` | ❌ | Đối thủ là **người thật**. |
+
+Trong ván với người thật, engine không chạy — không có cài đặt nào bật được, và
+trên bàn phân tích nó cũng tự tắt nếu trang vẫn còn nút đầu hàng của một ván
+đang diễn ra. Dùng engine khi đấu với người là gian lận theo luật Chess.com:
+đối thủ mất ván công bằng, còn bạn mất tài khoản.
 
 Thống kê khai cuộc là *sách khai cuộc* chứ không phải engine, nên không bị chặn
-theo trang — nhưng nó vẫn là trợ giúp ngoài, hãy tắt (Alt+P) khi đang thi đấu.
+theo trang — nhưng nó vẫn là trợ giúp ngoài, hãy tắt (Alt+P) khi đấu với người.
 
 ## Tính năng
 
@@ -33,6 +39,7 @@ theo trang — nhưng nó vẫn là trợ giúp ngoài, hãy tắt (Alt+P) khi �
 | **Biến chính** | Mỗi nước kèm biến chính dạng SAN, rê chuột để thấy mũi tên trên bàn cờ |
 | **Thống kê thật** | Tần suất, thắng/hòa/bại, số ván, Elo trung bình cho từng nước |
 | **Tên khai cuộc** | Mã ECO + tên khai cuộc của thế cờ hiện tại |
+| **Luyện với bot** | Điểm số cập nhật theo từng nước ngay trong ván với máy |
 | **Theo dõi mọi chế độ** | Ván trực tiếp, phân tích, xem lại ván, puzzle, bàn cờ lật ngược |
 | **Bộ lọc** | Thể loại, mức Elo, độ sâu máy, số nước gợi ý |
 
@@ -103,7 +110,7 @@ nhập thành từ vị trí vua/xe, và ô bắt tốt qua đường chỉ khi 
 
 ```bash
 npm install          # chỉ cần cho test và script build
-npm test             # 90 test: đọc thế cờ, UCI, cổng fair play, API, giao diện, manifest
+npm test             # 97 test: đọc thế cờ, UCI, cổng fair play, API, giao diện, manifest
 npm run icons        # tạo lại icons/*.png
 npm run zip          # đóng gói dist/chess-move-percent-<version>.zip
 npm run bundle:chess # đóng gói lại chess.js
@@ -118,7 +125,7 @@ lập giống Chess.com; service worker và bộ phân tích UCI chạy trong sa
 ```
 manifest.json                     khai báo tiện ích (MV3)
 src/content/position.js           đọc DOM Chess.com → FEN
-src/content/context.js            cổng fair play: engine được phép chạy ở đâu
+src/content/context.js            cổng fair play: engine được phép chạy ở trang nào
 src/content/content.js            theo dõi bàn cờ, điều phối hai chế độ
 src/content/ui.js                 bảng + lớp phủ trên bàn cờ
 src/content/styles.css            toàn bộ CSS (tiền tố cmp-)
@@ -137,9 +144,10 @@ test/                             test chạy bằng node:test + jsdom
 
 Nếu bảng báo "Không tìm thấy bàn cờ", thường chỉ cần thêm selector mới vào
 `BOARD_SELECTORS` hoặc `MOVE_LIST_SELECTORS` ở đầu `src/content/position.js`.
-Nếu nút đầu hàng đổi tên, cập nhật `LIVE_CONTROL_SELECTORS` trong
-`src/content/context.js` — đó là thứ giữ cho engine không chạy trong ván đang
-đánh.
+Nếu Chess.com đổi đường dẫn trang đấu với máy, cập nhật `ALLOWED_CONTEXTS`
+trong `src/content/context.js`; nếu nút đầu hàng đổi tên thì sửa
+`LIVE_CONTROL_SELECTORS` ngay dưới đó — đó là thứ giữ cho engine không chạy
+trong ván với người thật.
 
 ## Giấy phép
 

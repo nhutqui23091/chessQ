@@ -107,9 +107,11 @@ test('shows mate scores instead of centipawns', (t) => {
   assert.strictEqual(chips[1].textContent, '+1.2');
 });
 
-test('explains that the engine is off outside the analysis board', (t) => {
-  const { window } = setup(t, { status: 'blocked', reason: 'not-analysis', moves: [], depth: 0 });
-  assert.match(window.document.querySelector('.cmp-status').textContent, /bàn phân tích/);
+test('explains where the engine does run when it is off', (t) => {
+  const { window } = setup(t, { status: 'blocked', reason: 'not-allowed', moves: [], depth: 0 });
+  const text = window.document.querySelector('.cmp-status').textContent;
+  assert.match(text, /play\/computer/);
+  assert.match(text, /người thật/);
   assert.strictEqual(window.document.querySelectorAll('.cmp-badge').length, 0);
   assert.strictEqual(window.document.querySelectorAll('.cmp-row-eng').length, 0);
 });
@@ -119,12 +121,18 @@ test('says plainly why it refuses during a game in progress', (t) => {
   const text = window.document.querySelector('.cmp-status').textContent;
   assert.match(text, /ván diễn ra/);
   assert.match(text, /gian lận/);
+  assert.match(text, /người thật/);
 });
 
 test('shows partial results while the engine is still searching', (t) => {
   const { window } = setup(t, Object.assign({}, ENGINE, { status: 'thinking', depth: 9 }));
   assert.match(window.document.querySelector('.cmp-meta').textContent, /độ sâu 9/);
   assert.strictEqual(window.document.querySelectorAll('.cmp-badge').length, 4);
+});
+
+test('says when the live numbers come from a bot game', (t) => {
+  const { window } = setup(t, Object.assign({}, ENGINE, { context: 'computer' }));
+  assert.match(window.document.querySelector('.cmp-meta').textContent, /ván với máy/);
 });
 
 test('the mode switch reports the chosen mode', (t) => {

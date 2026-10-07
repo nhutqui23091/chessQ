@@ -21,7 +21,26 @@ test('the engine runs on the analysis board', () => {
   const status = window.CMPContext.engineStatus({
     pathname: '/analysis', document: window.document
   });
-  assert.deepStrictEqual({ ...status }, { allowed: true, reason: 'ok' });
+  assert.deepStrictEqual({ ...status }, { allowed: true, reason: 'ok', context: 'analysis' });
+});
+
+test('the engine runs live while practising against a bot', () => {
+  const window = loadContext();
+  for (const pathname of ['/play/computer', '/play/computer/komodo-level-5']) {
+    const status = window.CMPContext.engineStatus({ pathname, document: window.document });
+    assert.strictEqual(status.allowed, true, pathname);
+    assert.strictEqual(status.context, 'computer');
+  }
+});
+
+test('a bot game keeps the engine on despite its resign button', () => {
+  // The whole point is live help during the game, and /play/computer always has
+  // the controls of a game in progress.
+  const window = loadContext(`<!doctype html><html><body>${RESIGN}</body></html>`);
+  const status = window.CMPContext.engineStatus({
+    pathname: '/play/computer', document: window.document
+  });
+  assert.strictEqual(status.allowed, true);
 });
 
 test('Game Review of a finished game counts as analysis', () => {
@@ -32,12 +51,22 @@ test('Game Review of a finished game counts as analysis', () => {
   assert.strictEqual(status.allowed, true);
 });
 
-test('the engine never runs on a live game page', () => {
+test('the engine never runs where the opponent could be a person', () => {
   const window = loadContext();
-  for (const pathname of ['/play/online', '/game/live/123', '/play/computer', '/game/daily/55', '/']) {
+  for (const pathname of ['/play/online', '/game/live/123', '/game/daily/55', '/live', '/']) {
     const status = window.CMPContext.engineStatus({ pathname, document: window.document });
     assert.strictEqual(status.allowed, false, pathname);
-    assert.strictEqual(status.reason, 'not-analysis');
+    assert.strictEqual(status.reason, 'not-allowed', pathname);
+  }
+});
+
+test('a path that merely starts with an allowed one is not enough', () => {
+  const window = loadContext();
+  for (const pathname of ['/analysis-board-tips', '/play/computerized', '/play/online/computer']) {
+    assert.strictEqual(
+      window.CMPContext.engineStatus({ pathname, document: window.document }).allowed,
+      false, pathname
+    );
   }
 });
 

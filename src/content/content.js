@@ -63,10 +63,16 @@
   function requestEngine(position) {
     var gate = root.CMPContext.engineStatus();
     if (!gate.allowed) {
-      setEngine({ status: 'blocked', reason: gate.reason, moves: [], depth: 0, error: null });
+      setEngine({
+        status: 'blocked', reason: gate.reason, context: gate.context,
+        moves: [], depth: 0, error: null
+      });
       return;
     }
-    setEngine({ status: 'thinking', reason: null, moves: [], depth: 0, error: null });
+    setEngine({
+      status: 'thinking', reason: null, context: gate.context,
+      moves: [], depth: 0, error: null
+    });
     try {
       chrome.runtime.sendMessage({
         type: 'analyze',
