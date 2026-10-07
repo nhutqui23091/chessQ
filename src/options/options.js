@@ -66,6 +66,9 @@
     document.querySelectorAll('input[name="mode"]').forEach(function (radio) {
       radio.checked = radio.value === settings.mode;
     });
+    document.querySelectorAll('input[name="scoreStyle"]').forEach(function (radio) {
+      radio.checked = radio.value === settings.scoreStyle;
+    });
     $('lichess-filters').hidden = settings.database === 'masters';
     $('engine-settings').hidden = settings.mode !== 'engine';
     $('explorer-settings').hidden = settings.mode === 'engine';
@@ -117,6 +120,11 @@
     document.querySelectorAll('input[name="mode"]').forEach(function (radio) {
       radio.addEventListener('change', function () {
         if (this.checked) update({ mode: this.value });
+      });
+    });
+    document.querySelectorAll('input[name="scoreStyle"]').forEach(function (radio) {
+      radio.addEventListener('change', function () {
+        if (this.checked) update({ scoreStyle: this.value });
       });
     });
     $('reset').addEventListener('click', function () {

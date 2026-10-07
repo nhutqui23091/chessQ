@@ -155,11 +155,22 @@ async function main() {
       const meta = document.querySelector('.cmp-meta');
       const depth = /độ sâu (\d+)/.exec(meta ? meta.textContent : '');
       if (rows.length < 4 || !depth || Number(depth[1]) < 14) return null;
-      return { rows: rows.length, first: rows[0].querySelector('.cmp-c-san').textContent };
+      return {
+        rows: rows.length,
+        first: rows[0].querySelector('.cmp-c-san').textContent,
+        score: rows[0].querySelector('.cmp-eval').textContent,
+        meta: document.querySelector('.cmp-meta').textContent
+      };
     }, 30000);
-    check('it still reads the game where only the move text is readable',
+    check('it reads a game whose piece letters are images',
       !!fromMoves,
-      fromMoves ? `${fromMoves.rows} nước, tốt nhất ${fromMoves.first}` : 'no position');
+      fromMoves ? `${fromMoves.rows} nước, tốt nhất ${fromMoves.first} ${fromMoves.score}` : 'no position');
+    check('and says the position came from the move list',
+      !!fromMoves && /đọc từ danh sách nước đi/.test(fromMoves.meta),
+      fromMoves ? fromMoves.meta : '');
+    check('scores read as a chance of winning by default',
+      !!fromMoves && /^\d{1,3}%$/.test(fromMoves.score),
+      fromMoves ? fromMoves.score : '');
     await opaque.close();
     void started;
 

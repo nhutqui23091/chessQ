@@ -34,7 +34,8 @@ theo trang — nhưng nó vẫn là trợ giúp ngoài, hãy tắt (Alt+P) khi �
 
 | | |
 |---|---|
-| **Điểm trên bàn cờ** | Mỗi nước ứng viên có một huy hiệu điểm ngay ô đích, màu từ xanh (tốt nhất) tới đỏ (sai lầm) |
+| **Điểm trên bàn cờ** | Mỗi nước ứng viên có một nhãn ở **góc ô đích** (không che quân), màu từ xanh (tốt nhất) tới đỏ (sai lầm) |
+| **Tỉ lệ thắng** | Mặc định ghi điểm kiểu `62%` thay vì `+0.8`; đổi được trong ⚙ |
 | **Nhiều nước cùng ô** | Hai nước cùng đích (c3 và Nc3) được tách ra và ghi rõ tên nước |
 | **Biến chính** | Mỗi nước kèm biến chính dạng SAN, rê chuột để thấy mũi tên trên bàn cờ |
 | **Thống kê thật** | Tần suất, thắng/hòa/bại, số ván, Elo trung bình cho từng nước |
@@ -82,7 +83,10 @@ Không cần build: `chess.bundle.js` và Stockfish đã đóng gói sẵn trong
 * Rê chuột lên một dòng để thấy nước đó trên bàn cờ.
 
 **Điểm số tính theo bên đang đi**: số càng lớn càng tốt cho người sắp đi, nên
-nước trên cùng luôn là nước tốt nhất cho bạn. `M3` nghĩa là chiếu hết sau 3 nước.
+nước trên cùng luôn là nước tốt nhất cho bạn. `M3` nghĩa là chiếu hết sau 3
+nước. Mặc định điểm ghi theo **tỉ lệ thắng** (`62%`, theo đường cong của
+Lichess — hơn một tốt mới khoảng 60%, không phải 100%); muốn kiểu `+0.8` thì
+đổi trong ⚙ hoặc trang tùy chọn.
 
 ## Cách hoạt động
 
@@ -124,7 +128,7 @@ nhập thành từ vị trí vua/xe, và ô bắt tốt qua đường chỉ khi 
 
 ```bash
 npm install          # chỉ cần cho test và script build
-npm test             # 109 test: đọc thế cờ, UCI, cổng fair play, API, giao diện, manifest
+npm test             # 120 test: đọc thế cờ, UCI, cổng fair play, API, giao diện, manifest
 npm i -D playwright  # chỉ cần cho test:e2e
 npm run test:e2e     # nạp tiện ích thật vào Chromium thật, chạy Stockfish thật
 npm run icons        # tạo lại icons/*.png
@@ -176,11 +180,24 @@ của Chess.com giữ nguyên**:
   cha chứa cụm dày đặc nhất (tính điểm theo `số nước² / số phần tử con`, để một
   nước lọt vào khung chat không kéo cả `<body>` thành danh sách nước đi).
 
-Trên các trang bot mới của Chess.com, quân cờ hoàn toàn không đọc được — bàn cờ
-chỉ còn nhãn toạ độ. Khi đó tiện ích dựng lại thế cờ **chỉ từ danh sách nước
-đi** (phát lại bằng chess.js) và ghi "đọc từ danh sách nước đi" trong bảng.
-Hướng bàn cờ khi đó lấy từ nhãn số hàng trong SVG toạ độ, không cần class
-`flipped`.
+Trên các trang bot mới của Chess.com, quân cờ **vẽ bằng canvas** nên không đọc
+được từ DOM — bàn cờ chỉ còn nhãn toạ độ. Khi đó tiện ích dựng lại thế cờ **chỉ
+từ danh sách nước đi** và ghi "đọc từ danh sách nước đi" trong bảng. Hướng bàn
+cờ lấy từ nhãn số hàng trong SVG toạ độ, không cần class `flipped`.
+
+Danh sách nước đi của Chess.com vẽ ký hiệu quân bằng **hình**, nên chữ đọc được
+chỉ còn `"f3"` thay vì `"Nf3"`, `"xd4"` thay vì `"Nxd4"`. Tiện ích xử lý theo
+thứ tự:
+
+1. Đọc tên quân từ chính hình đó — `data-figurine`, tên class, `alt`,
+   `aria-label`, đường dẫn ảnh, id sprite SVG, ảnh nền CSS, hay ký tự Unicode.
+2. Nếu không đọc được: chỉ cần biết **có** một hình là đủ để loại trừ nước tốt,
+   rồi đối chiếu với **các nước hợp lệ** trong thế cờ đó.
+3. Nếu vẫn còn hai cách hiểu (`xd4` có thể là `Nxd4` hoặc `Qxd4`): thử cả hai và
+   chơi tiếp phần còn lại của ván — nước sai thường làm một nước sau đó thành
+   bất hợp lệ.
+4. Nếu cả hai cách đều hợp lệ đến hết ván: **từ chối**, không đoán. Gợi ý sai
+   còn tệ hơn không có gợi ý.
 
 Việc quét toàn trang chỉ chạy **một lần**; sau đó phần tử bàn cờ và khung danh
 sách nước đi được nhớ lại, nên mỗi lần đọc tiếp theo chỉ tốn ~1ms thay vì

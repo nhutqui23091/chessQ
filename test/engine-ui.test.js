@@ -36,7 +36,7 @@ function setup(t, engine, settingsPatch) {
 }
 
 test('lists the engine moves best first with their scores', (t) => {
-  const { window } = setup(t, ENGINE);
+  const { window } = setup(t, ENGINE, { scoreStyle: 'pawns' });
   const rows = window.document.querySelectorAll('.cmp-row-eng:not(.cmp-row-head)');
   assert.strictEqual(rows.length, 4);
   assert.strictEqual(rows[0].querySelector('.cmp-c-san').textContent, 'c3');
@@ -44,6 +44,31 @@ test('lists the engine moves best first with their scores', (t) => {
   assert.strictEqual(rows[0].querySelector('.cmp-eval').textContent, '+0.6');
   assert.strictEqual(rows[3].querySelector('.cmp-eval').textContent, '-1.4');
   assert.match(rows[0].querySelector('.cmp-c-pv').textContent, /c3 Nf6 d4/);
+});
+
+test('by default a score reads as a chance of winning', (t) => {
+  const { window } = setup(t, ENGINE);
+  const chips = [...window.document.querySelectorAll('.cmp-row-eng:not(.cmp-row-head) .cmp-eval')];
+  chips.forEach((chip) => assert.match(chip.textContent, /^\d{1,3}%$/, chip.textContent));
+
+  // A small edge is a small edge: a third of a pawn is nowhere near winning.
+  const best = Number(chips[0].textContent.replace('%', ''));
+  const worst = Number(chips[3].textContent.replace('%', ''));
+  assert.ok(best > 50 && best < 60, `${best}% for +0.62`);
+  assert.ok(worst < 45, `${worst}% for -1.40`);
+  assert.ok(best > worst);
+
+  // Both readings stay available on hover.
+  assert.match(chips[0].title, /Tỉ lệ thắng/);
+  assert.match(chips[0].title, /\+0\.6/);
+});
+
+test('an even position is 50%', (t) => {
+  const level = Object.assign({}, ENGINE, {
+    moves: [{ uci: 'e2e4', san: 'e4', cp: 0, mate: null, loss: 0, best: true, pvSan: ['e4'] }]
+  });
+  const { window } = setup(t, level);
+  assert.strictEqual(window.document.querySelector('.cmp-eval').textContent, '50%');
 });
 
 test('colours each move by how far behind the best one it is', (t) => {
@@ -56,7 +81,7 @@ test('colours each move by how far behind the best one it is', (t) => {
 });
 
 test('puts a score badge on each candidate square', (t) => {
-  const { window } = setup(t, ENGINE);
+  const { window } = setup(t, ENGINE, { scoreStyle: 'pawns' });
   const badges = window.document.querySelectorAll('.cmp-badge');
   assert.strictEqual(badges.length, 4);
   // c2c3 -> c3 is file c (col 2), rank 3 (row 5 from the top)
@@ -64,6 +89,9 @@ test('puts a score badge on each candidate square', (t) => {
   assert.strictEqual(badges[0].style.top, 'calc(var(--cmp-square, 48px) * 5)');
   assert.strictEqual(badges[0].textContent, '+0.6');
   assert.ok(badges[0].classList.contains('cmp-eval-best'));
+  // The label sits in a chip, not across the whole square, so the piece
+  // underneath stays visible.
+  assert.ok(badges[0].querySelector('.cmp-badge-text'));
 });
 
 test('spreads badges out when two moves share a destination', (t) => {
@@ -77,11 +105,14 @@ test('spreads badges out when two moves share a destination', (t) => {
   const badges = window.document.querySelectorAll('.cmp-badge');
   assert.strictEqual(badges.length, 2);
   // Same square, so both move off the centre line, in opposite directions...
-  assert.match(badges[0].style.transform, /translateY\(-26%\)/);
+  assert.match(badges[0].style.transform, /translateY\(0%\)/);
   assert.match(badges[1].style.transform, /translateY\(26%\)/);
+  // Each keeps its styled chip rather than being replaced by bare text.
+  assert.ok(badges[0].querySelector('.cmp-badge-text'));
+  assert.ok(badges[1].querySelector('.cmp-badge-text'));
   // ...and each names its own move, since the square alone no longer tells them apart.
-  assert.strictEqual(badges[0].textContent, 'Nbd2 +0.3');
-  assert.strictEqual(badges[1].textContent, 'Nfd2 +0.1');
+  assert.match(badges[0].textContent, /^Nbd2 /);
+  assert.match(badges[1].textContent, /^Nfd2 /);
   assert.ok(badges[0].classList.contains('cmp-badge-stacked'));
 });
 
@@ -94,17 +125,22 @@ test('a badge on an uncontested square shows the score alone', (t) => {
   });
 });
 
-test('shows mate scores instead of centipawns', (t) => {
+test('shows mate scores instead of a number', (t) => {
   const engine = Object.assign({}, ENGINE, {
     moves: [
       { uci: 'd1h5', san: 'Qh5#', cp: null, mate: 1, loss: 0, best: true, pvSan: ['Qh5#'] },
       { uci: 'e1g1', san: 'O-O', cp: 120, mate: null, loss: 99000, best: false, pvSan: ['O-O'] }
     ]
   });
-  const { window } = setup(t, engine);
+  const { window } = setup(t, engine, { scoreStyle: 'pawns' });
   const chips = window.document.querySelectorAll('.cmp-row-eng:not(.cmp-row-head) .cmp-eval');
   assert.strictEqual(chips[0].textContent, 'M1');
   assert.strictEqual(chips[1].textContent, '+1.2');
+
+  // A mate reads as a mate in either style — "100%" would say less.
+  const asWinrate = setup(t, engine);
+  assert.strictEqual(
+    asWinrate.window.document.querySelector('.cmp-eval').textContent, 'M1');
 });
 
 test('explains where the engine does run when it is off', (t) => {

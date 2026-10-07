@@ -27,12 +27,16 @@
     // Engine
     engineDepth: 14,
     engineLines: 4,
+    // How a score is written: 'winrate' = chance of winning (62%),
+    // 'pawns' = the usual engine number (+0.8).
+    scoreStyle: 'winrate',
     // Remembered panel position {left, top} in px, null = default corner.
     panelPos: null,
     panelCollapsed: false
   };
 
   var MODE_OPTIONS = ['explorer', 'engine'];
+  var SCORE_STYLES = ['winrate', 'pawns'];
   var SPEED_OPTIONS = ['ultraBullet', 'bullet', 'blitz', 'rapid', 'classical', 'correspondence'];
   var RATING_OPTIONS = [0, 1000, 1200, 1400, 1600, 1800, 2000, 2200, 2500];
 
@@ -62,6 +66,7 @@
 
     if (out.database !== 'masters') out.database = 'lichess';
     if (MODE_OPTIONS.indexOf(out.mode) === -1) out.mode = 'explorer';
+    if (SCORE_STYLES.indexOf(out.scoreStyle) === -1) out.scoreStyle = 'winrate';
     out.speeds = out.speeds.filter(function (s) { return SPEED_OPTIONS.indexOf(s) !== -1; });
     if (!out.speeds.length) out.speeds = clone(DEFAULTS.speeds);
     out.ratings = out.ratings
@@ -102,6 +107,7 @@
   root.CMPSettings = {
     DEFAULTS: DEFAULTS,
     MODE_OPTIONS: MODE_OPTIONS,
+    SCORE_STYLES: SCORE_STYLES,
     SPEED_OPTIONS: SPEED_OPTIONS,
     RATING_OPTIONS: RATING_OPTIONS,
     normalize: normalize,

@@ -270,3 +270,142 @@ test('scanning a big page for moves stays cheap', () => {
   assert.ok(firstCall < 600, `${firstCall} ms for the first read is too slow`);
   assert.ok(perCall < 10, `${perCall.toFixed(1)} ms per repeat read is too slow`);
 });
+
+// --- figurine move lists where the glyph is not text --------------------------
+// Chess.com draws the piece as an image, so "Nxd4" reads only as "xd4".
+
+/** The exact game from the reported screenshot: 1.e4 c5 2.Nf3 d6 3.d4 cxd4
+ *  4.Nxd4 Nf6 5.c3 Ng4 — with every piece letter replaced by an image. */
+function imageMoveList(moves, selectedIndex) {
+  const rows = moves.map((move, index) => {
+    const selected = index + 1 === selectedIndex ? ' selected' : '';
+    const glyph = move.piece
+      ? `<img src="/bundles/web/images/${move.piece}.svg" alt="">`
+      : '';
+    return `<span class="a7Bq${selected}">${glyph}${move.text}</span>`;
+  }).join('');
+  return `<div class="gjQxHO"><div class="pLmNo">${rows}</div></div>`;
+}
+
+const SICILIAN = [
+  { text: 'e4' }, { text: 'c5' },
+  { text: 'f3', piece: 'wn' }, { text: 'd6' },
+  { text: 'd4' }, { text: 'cxd4' },
+  { text: 'xd4', piece: 'wn' }, { text: 'f6', piece: 'bn' },
+  { text: 'c3' }, { text: 'g4', piece: 'bn' }
+];
+
+test('reads a move list whose piece letters are images', () => {
+  const { position } = read(OPAQUE_BOARD + imageMoveList(SICILIAN, 10));
+  assert.ok(position, 'should read the game');
+  assert.strictEqual(position.source, 'move-list-only');
+  // After 1.e4 c5 2.Nf3 d6 3.d4 cxd4 4.Nxd4 Nf6 5.c3 Ng4 — white to move.
+  assert.strictEqual(position.fen,
+    'rnbqkb1r/pp2pppp/3p4/8/3NP1n1/2P5/PP3PPP/RNBQKB1R w KQkq - 1 6');
+});
+
+test('a glyph rules out the pawn reading of the same text', () => {
+  // "f3" alone is a legal pawn move; with a knight glyph it must be Nf3.
+  const withGlyph = read(OPAQUE_BOARD + imageMoveList(
+    [{ text: 'e4' }, { text: 'c5' }, { text: 'f3', piece: 'wn' }], 3)).position;
+  assert.strictEqual(withGlyph.fen.split(' ')[0],
+    'rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R');
+
+  const withoutGlyph = read(OPAQUE_BOARD + imageMoveList(
+    [{ text: 'e4' }, { text: 'c5' }, { text: 'f3' }], 3)).position;
+  assert.strictEqual(withoutGlyph.fen.split(' ')[0],
+    'rnbqkbnr/pp1ppppp/8/2p5/4P3/5P2/PPPP2PP/RNBQKBNR');
+});
+
+test('a capture that reads only as "xd4" resolves to the piece that can take', () => {
+  const { position } = read(OPAQUE_BOARD + imageMoveList(SICILIAN.slice(0, 7), 7));
+  assert.strictEqual(position.fen.split(' ')[0],
+    'rnbqkbnr/pp2pppp/3p4/8/3NP3/8/PPP2PPP/RNBQKB1R');
+});
+
+test('the piece letter is read from a class, a label or a sprite id', () => {
+  const variants = [
+    '<span class="icon-font-chess knight-white"></span>',
+    '<span class="piece wn"></span>',
+    '<i aria-label="Knight"></i>',
+    '<svg><use href="#wn"></use></svg>',
+    '<span>♘</span>'
+  ];
+  for (const glyph of variants) {
+    const html = OPAQUE_BOARD +
+      `<div class="gjQxHO"><div class="pLmNo">
+        <span class="a7Bq">e4</span><span class="a7Bq">c5</span>
+        <span class="a7Bq selected">${glyph}f3</span></div></div>`;
+    const { position } = read(html);
+    assert.strictEqual(position.fen.split(' ')[0],
+      'rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R', glyph);
+  }
+});
+
+test('a move that cannot be played stops the replay instead of guessing', () => {
+  // Readable text, but no legal move fits it: better no position than a wrong
+  // one, since every later move would build on the mistake.
+  const { position } = read(OPAQUE_BOARD + imageMoveList(
+    [{ text: 'e4' }, { text: 'e5' }, { text: 'e4' }], 3));
+  assert.strictEqual(position, null);
+});
+
+test('an ambiguous glyph-less move is refused rather than guessed', () => {
+  // Two knights can reach d2 and the glyph says only "a piece moved".
+  const { position } = read(OPAQUE_BOARD + imageMoveList([
+    { text: 'f3', piece: 'wn' }, { text: 'f6', piece: 'bn' },
+    { text: 'c3', piece: 'wn' }, { text: 'c6', piece: 'bn' },
+    { text: 'd2' }
+  ], 5));
+  assert.strictEqual(position, null);
+});
+
+test('disambiguated moves survive losing their piece letter', () => {
+  // 1.Nf3 Nf6 2.Nc3 Nc6 3.Nb1 — "b1" with a glyph is Nb1, not a pawn move.
+  const { position } = read(OPAQUE_BOARD + imageMoveList([
+    { text: 'f3', piece: 'wn' }, { text: 'f6', piece: 'bn' },
+    { text: 'c3', piece: 'wn' }, { text: 'c6', piece: 'bn' },
+    { text: 'b1', piece: 'wn' }
+  ], 5));
+  assert.ok(position);
+  assert.strictEqual(position.fen.split(' ')[0],
+    'r1bqkb1r/pppppppp/2n2n2/8/8/5N2/PPPPPPPP/RNBQKB1R');
+});
+
+test('an anonymous glyph is resolved by what the rest of the game allows', () => {
+  // The image says nothing about which piece it is, so "xd4" could be Nxd4 or
+  // Qxd4. Only the knight can go on to capture on c6 — from d4 the queen has
+  // no move there at all — so the later move settles the earlier one.
+  const moves = [
+    { text: 'e4' }, { text: 'c5' },
+    { text: 'f3', piece: 'anon' }, { text: 'd6' },
+    { text: 'd4' }, { text: 'cxd4' },
+    { text: 'xd4', piece: 'anon' }, { text: 'c6', piece: 'anon' },
+    { text: 'xc6', piece: 'anon' }
+  ];
+  const html = OPAQUE_BOARD + `<div class="gjQxHO"><div class="pLmNo">${
+    moves.map((m, i) => `<span class="a7Bq${i === moves.length - 1 ? ' selected' : ''}">${
+      m.piece ? '<img src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" alt="">' : ''
+    }${m.text}</span>`).join('')}</div></div>`;
+
+  const { position } = read(html);
+  assert.ok(position, 'the search should settle it');
+  assert.strictEqual(position.fen,
+    'r1bqkbnr/pp2pppp/2Np4/8/4P3/8/PPP2PPP/RNBQKB1R b KQkq - 0 5');
+});
+
+test('two readings that both survive are refused, not guessed', () => {
+  // Nothing later rules out Qxd4, so Nxd4 and Qxd4 both replay to the end.
+  const moves = [
+    { text: 'e4' }, { text: 'c5' },
+    { text: 'f3', piece: 'anon' }, { text: 'd6' },
+    { text: 'd4' }, { text: 'cxd4' },
+    { text: 'xd4', piece: 'anon' }
+  ];
+  const html = OPAQUE_BOARD + `<div class="gjQxHO"><div class="pLmNo">${
+    moves.map((m, i) => `<span class="a7Bq${i === moves.length - 1 ? ' selected' : ''}">${
+      m.piece ? '<img src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" alt="">' : ''
+    }${m.text}</span>`).join('')}</div></div>`;
+
+  assert.strictEqual(read(html).position, null);
+});

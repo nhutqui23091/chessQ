@@ -19,7 +19,7 @@
 (function (root) {
   'use strict';
 
-  var VERSION = '1.5.0';
+  var VERSION = '1.6.0';
   var FILES = 'abcdefgh';
   var PIECE_RE = /(?:^|\s)(?:piece\s+)?([wb])([kqrbnp])(?:\s|$)/;
   var SQUARE_RE = /\bsquare-(\d)(\d)\b/;
@@ -43,6 +43,7 @@
     '[class*="move-list"]'
   ];
   var FIGURINES = { pawn: '', knight: 'N', bishop: 'B', rook: 'R', queen: 'Q', king: 'K' };
+  var VI_FIGURINES = { 'tốt': '', 'mã': 'N', 'tượng': 'B', 'xe': 'R', 'hậu': 'Q', 'vua': 'K' };
   var UNICODE_PIECES = {
     '♔': 'K', '♕': 'Q', '♖': 'R', '♗': 'B', '♘': 'N', '♙': '',
     '♚': 'K', '♛': 'Q', '♜': 'R', '♝': 'B', '♞': 'N', '♟': ''
@@ -290,7 +291,7 @@
       board: board ? signature(board) : null,
       pieces: allPieceElements().length,
       squares: queryAll('[class*="square-"]').length,
-      moveNodes: moveList ? moveList.sans.length : 0,
+      moveNodes: moveList ? moveList.moves.length : 0,
       shadowRoots: roots().length - 1,
       selectors: selectorHits,
       counts: {
@@ -490,20 +491,100 @@
     return text;
   }
 
-  function sanFromNode(el) {
-    var prefix = '';
-    var figurine = el.getAttribute && el.getAttribute('data-figurine');
-    var icon = el.querySelector('[data-figurine], [class*="icon-font-chess"], [class*="figurine"]');
-    if (!figurine && icon) figurine = icon.getAttribute('data-figurine');
+  /**
+   * The piece letter a figurine glyph stands for, from however the glyph is
+   * drawn: an attribute, a class, an image, an SVG sprite, a label, or the
+   * Unicode character itself. Returns '' for a pawn and null when unknown.
+   */
+  /**
+   * @param useClass whether the element's class may be read. Hashed class
+   *        names are a minefield for the sprite-code pattern below — a class
+   *        like "a7Bq" reads as "black queen" — so it is only trusted on an
+   *        element that is plainly a glyph, never on the move itself.
+   */
+  function figurineLetter(el, useClass) {
+    if (!el || !el.getAttribute) return null;
+
+    var figurine = el.getAttribute('data-figurine') || el.getAttribute('data-piece');
     if (figurine) {
-      prefix = figurine.toUpperCase() === 'P' ? '' : figurine.toUpperCase();
-    } else if (icon) {
-      var name = /(pawn|knight|bishop|rook|queen|king)/.exec(classNameOf(icon));
-      if (name) prefix = FIGURINES[name[1]];
+      var code = figurine.length > 1 ? figurine.charAt(1) : figurine.charAt(0);
+      return code.toUpperCase() === 'P' ? '' : code.toUpperCase();
     }
-    var san = cleanSan(el.textContent);
-    if (prefix && san && /^[a-h]/.test(san)) san = prefix + san;
-    return san;
+
+    var haystack = [
+      useClass ? classNameOf(el) : '',
+      el.getAttribute('aria-label') || '',
+      el.getAttribute('alt') || '',
+      el.getAttribute('title') || '',
+      el.getAttribute('src') || '',
+      el.getAttribute('href') || '',
+      el.getAttribute('xlink:href') || ''
+    ].join(' ').toLowerCase();
+
+    var named = /(pawn|knight|bishop|rook|queen|king|tốt|mã|tượng|xe|hậu|vua)/.exec(haystack);
+    if (named) {
+      return FIGURINES[named[1]] !== undefined ? FIGURINES[named[1]] : VI_FIGURINES[named[1]];
+    }
+
+    // Sprite names like "wn.svg", "#wn", "piece wn" — the code must be a whole
+    // token, so that a hashed class cannot be mistaken for one.
+    var coded = /(?:^|[\s/_#.-])([wb])([kqrbnp])(?=$|[\s/_#.-])/.exec(haystack);
+    if (coded) return coded[2].toUpperCase() === 'P' ? '' : coded[2].toUpperCase();
+
+    var glyph = /[\u2654-\u265F]/.exec(el.textContent || '');
+    if (glyph) return UNICODE_PIECES[glyph[0]];
+
+    // A CSS sprite names the piece in its URL.
+    if (useClass && root.getComputedStyle) {
+      try {
+        var background = root.getComputedStyle(el).backgroundImage || '';
+        var fromBackground = /(?:^|[\s/_#.(-])([wb])([kqrbnp])(?=$|[\s/_#.)-])/
+          .exec(background.toLowerCase());
+        if (fromBackground) {
+          return fromBackground[2].toUpperCase() === 'P' ? '' : fromBackground[2].toUpperCase();
+        }
+      } catch (err) { /* detached node */ }
+    }
+
+    return null;
+  }
+
+  /**
+   * A move as read from the page: the text that was legible, the piece letter
+   * if the glyph could be identified, and whether a glyph was there at all.
+   *
+   * Chess.com draws the piece as an image, so the text of "Nxd4" reads only
+   * "xd4". Knowing merely that a glyph exists is enough: it rules out a pawn
+   * move, and the rules of chess settle the rest.
+   */
+  function moveEntry(el) {
+    var text = cleanSan(el.textContent);
+    var letter = null;
+    var glyph = false;
+
+    // The move element itself: attributes only, never its class.
+    var own = figurineLetter(el, false);
+    if (own !== null && !/^[KQRBN]/.test(text)) {
+      letter = own;
+      glyph = true;
+    }
+    // The glyph can be nested — <svg><use href="#wn"> — so look past the
+    // immediate children. Capped: this only runs for moves that have a glyph.
+    var inside = el.querySelectorAll('*');
+    for (var i = 0; i < inside.length && i < 8 && letter === null; i++) {
+      var child = figurineLetter(inside[i], true);
+      if (child !== null) {
+        letter = child;
+        glyph = true;
+      }
+    }
+    if (!glyph && el.childElementCount) glyph = true; // a glyph we could not read
+    return { text: text, letter: letter, glyph: glyph };
+  }
+
+  /** Text that could be a move, including "xd4" where the piece was an image. */
+  function looksLikeMoveText(text) {
+    return /^(O-O(-O)?|[KQRBN]?[a-h]?[1-8]?x?[a-h][1-8](=[QRBN])?)$/.test(text);
   }
 
   function looksLikeSan(san) {
@@ -530,19 +611,19 @@
   function extractFromContainer(container) {
     var raw = container.querySelectorAll(NODE_SELECTOR);
     var nodes = innermost(Array.prototype.slice.call(raw));
-    var sans = [];
+    var moves = [];
     var elements = [];
     for (var k = 0; k < nodes.length; k++) {
-      var san = sanFromNode(nodes[k]);
-      if (!looksLikeSan(san)) continue;
-      sans.push(san);
+      var entry = moveEntry(nodes[k]);
+      if (!looksLikeMoveText(entry.text)) continue;
+      moves.push(entry);
       elements.push(nodes[k]);
     }
-    if (!sans.length) return null;
+    if (!moves.length) return null;
 
     return {
       container: container,
-      sans: sans,
+      moves: moves,
       selected: selectedIndexOf(elements, container),
       source: 'selector'
     };
@@ -560,28 +641,28 @@
       var again = moveCache.kind === 'selector'
         ? extractFromContainer(moveCache.container)
         : readTextMoves(moveCache.container);
-      if (again && again.sans.length) return again;
+      if (again && again.moves.length) return again;
       moveCache = { container: null, kind: null };
     }
 
     var bySelector = readMoveListBySelector();
-    if (bySelector && bySelector.sans.length) {
+    if (bySelector && bySelector.moves.length) {
       moveCache = { container: bySelector.container, kind: 'selector' };
       return bySelector;
     }
 
     var found = findMoveNodesByText();
-    if (!found || !found.sans.length) return null;
+    if (!found || !found.moves.length) return null;
     moveCache = { container: found.container, kind: 'text' };
     return readTextMoves(found.container, found);
   }
 
   function readTextMoves(container, known) {
     var found = known || collectMovesFrom(container);
-    if (!found || !found.sans.length) return null;
+    if (!found || !found.moves.length) return null;
     return {
       container: container,
-      sans: found.sans,
+      moves: found.moves,
       selected: selectedIndexOf(found.nodes, container),
       source: 'text'
     };
@@ -598,7 +679,7 @@
   /** Reads the moves out of a container already known to hold them. */
   function collectMovesFrom(container) {
     var nodes = [];
-    var sans = [];
+    var moves = [];
     var all = container.querySelectorAll('*');
     for (var i = 0; i < all.length; i++) {
       var el = all[i];
@@ -606,13 +687,14 @@
       var raw = el.textContent;
       if (!raw || raw.length > 12) continue;
       var text = cleanSan(raw);
-      if (!text || text.length > 7) continue;
-      var san = el.childElementCount === 0 ? text : sanFromNode(el);
-      if (!looksLikeSan(san)) continue;
+      if (!text || text.length > 7 || !looksLikeMoveText(text)) continue;
       nodes.push(el);
-      sans.push(san);
+      // Only elements holding a glyph pay for the figurine lookup.
+      moves.push(el.childElementCount === 0
+        ? { text: text, letter: null, glyph: false }
+        : moveEntry(el));
     }
-    return sans.length ? { container: container, nodes: nodes, sans: sans } : null;
+    return moves.length ? { container: container, nodes: nodes, moves: moves } : null;
   }
 
   function findMoveNodesByText() {
@@ -626,13 +708,13 @@
       var raw = el.textContent;
       if (!raw || raw.length > 12) continue;
       var text = cleanSan(raw);
-      if (!text || text.length > 7) continue;
-      // Only elements holding a glyph need the figurine lookup, which costs a
-      // DOM query — the rest are read straight from their text.
-      var san = el.childElementCount === 0 ? text : sanFromNode(el);
-      if (!looksLikeSan(san)) continue;
+      if (!text || text.length > 7 || !looksLikeMoveText(text)) continue;
       hits.push(el);
-      sans.push(san);
+      // Only elements holding a glyph pay for the figurine lookup, which costs
+      // DOM access — the rest are read straight from their text.
+      sans.push(el.childElementCount === 0
+        ? { text: text, letter: null, glyph: false }
+        : moveEntry(el));
     }
     if (hits.length < 2) return null;
 
@@ -671,7 +753,7 @@
       nodes.push(hits[k]);
       moves.push(sans[k]);
     }
-    return { container: container, nodes: nodes, sans: moves };
+    return { container: container, nodes: nodes, moves: moves };
   }
 
   function selectedIndexOf(nodes, container) {
@@ -693,17 +775,82 @@
     return selected;
   }
 
-  function replay(sans, count) {
-    if (!root.ChessLib || !root.ChessLib.Chess) return null;
-    var game = new root.ChessLib.Chess();
-    for (var i = 0; i < count; i++) {
-      try {
-        if (!game.move(sans[i], { strict: false })) return null;
-      } catch (err) {
-        return null;
+  /**
+   * Works out which legal move the page meant.
+   *
+   * The text alone is often incomplete — "xd4" for Nxd4, "f3" for Nf3 — so it
+   * is matched against the moves that are actually legal here. A glyph next to
+   * the text means a piece moved, which rules out the pawn reading. When two
+   * legal moves still fit, this gives up rather than guess: a wrong move would
+   * silently poison every position after it.
+   */
+  function resolveCandidates(game, entry) {
+    var text = entry.text;
+    if (!text) return [];
+    var legal = game.moves();
+    var candidates = [];
+
+    for (var i = 0; i < legal.length; i++) {
+      var bare = legal[i].replace(/[+#]/g, '');
+      if (entry.letter && bare === entry.letter + text) return [legal[i]];
+      var isPawnMove = /^[a-h]/.test(bare);
+      if (bare === text) {
+        candidates.push({ san: legal[i], exact: true, pawn: isPawnMove });
+      } else if (bare.length > text.length && bare.slice(-text.length) === text) {
+        candidates.push({ san: legal[i], exact: false, pawn: isPawnMove });
       }
     }
-    return game;
+    if (!candidates.length) return [];
+
+    var pool = candidates;
+    if (entry.glyph) {
+      // A glyph was drawn, so a piece moved, not a pawn.
+      var pieceMoves = candidates.filter(function (c) { return !c.pawn; });
+      if (pieceMoves.length) pool = pieceMoves;
+    } else {
+      var exact = candidates.filter(function (c) { return c.exact; });
+      if (exact.length) pool = exact;
+    }
+    return pool.map(function (c) { return c.san; });
+  }
+
+  /**
+   * Replays the move list, searching when a move is ambiguous.
+   *
+   * Chess.com draws piece letters as images; when the image says nothing about
+   * which piece it is, "xd4" could be Nxd4 or Qxd4. Trying both and continuing
+   * usually settles it, because the wrong one makes a later move impossible.
+   * If two readings both survive to the end, this returns nothing rather than
+   * pick one — a wrong game would mean confidently wrong advice.
+   */
+  function replay(entries, count) {
+    if (!root.ChessLib || !root.ChessLib.Chess) return null;
+    var game = new root.ChessLib.Chess();
+    var state = { budget: 400, solutions: 0, fen: null };
+    search(game, entries, 0, count, state);
+    if (state.solutions !== 1) return null;
+    return new root.ChessLib.Chess(state.fen);
+  }
+
+  function search(game, entries, index, count, state) {
+    if (index >= count) {
+      state.solutions++;
+      if (state.solutions === 1) state.fen = game.fen();
+      return;
+    }
+    var entry = entries[index];
+    if (!entry) return;
+    var options = resolveCandidates(game, entry);
+    for (var i = 0; i < options.length && state.solutions < 2; i++) {
+      if (state.budget-- <= 0) return;
+      try {
+        if (!game.move(options[i])) continue;
+      } catch (err) {
+        continue;
+      }
+      search(game, entries, index + 1, count, state);
+      game.undo();
+    }
   }
 
   /**
@@ -717,7 +864,7 @@
     var placement = pieces ? placementOf(pieces) : null;
 
     if (moveList) {
-      var game = replay(moveList.sans, moveList.selected);
+      var game = replay(moveList.moves, moveList.selected);
       if (game) {
         // With readable pieces the replay is only trusted when it matches what
         // is on the board, which is what keeps variations and puzzles correct.

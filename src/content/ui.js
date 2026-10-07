@@ -235,6 +235,19 @@
     });
     linesRow.appendChild(linesChips);
 
+    var styleRow = h('div', 'cmp-field cmp-engine-only');
+    styleRow.appendChild(h('div', 'cmp-field-label', 'Cách ghi điểm'));
+    var styleChips = h('div', 'cmp-chips');
+    [['winrate', 'Tỉ lệ thắng (62%)'], ['pawns', 'Điểm máy (+0.8)']].forEach(function (pair) {
+      var chip = h('button', 'cmp-chip', pair[1]);
+      chip.dataset.scoreStyle = pair[0];
+      chip.addEventListener('click', function () {
+        self.emit({ scoreStyle: pair[0] });
+      });
+      styleChips.appendChild(chip);
+    });
+    styleRow.appendChild(styleChips);
+
     var badgeRow = h('label', 'cmp-field cmp-check');
     var badgeToggle = h('input');
     badgeToggle.type = 'checkbox';
@@ -247,6 +260,7 @@
     box.appendChild(dbRow);
     box.appendChild(speedRow);
     box.appendChild(ratingRow);
+    box.appendChild(styleRow);
     box.appendChild(depthRow);
     box.appendChild(linesRow);
     box.appendChild(badgeRow);
@@ -262,6 +276,7 @@
       depthInput: depthInput,
       depthValue: depthValue,
       linesChips: linesChips,
+      styleChips: styleChips,
       badgeToggle: badgeToggle
     };
     return box;
@@ -378,9 +393,13 @@
     }
     box.style.display = '';
 
-    box.appendChild(h('div', 'cmp-diag-title', 'Không đọc được bàn cờ'));
-    box.appendChild(h('div', 'cmp-diag-hint',
-      'Chess.com có thể đã đổi giao diện. Gửi thông tin dưới đây để sửa:'));
+    var movesFound = info.moveNodes > 0;
+    box.appendChild(h('div', 'cmp-diag-title',
+      movesFound ? 'Không dựng lại được ván' : 'Không đọc được bàn cờ'));
+    box.appendChild(h('div', 'cmp-diag-hint', movesFound
+      ? 'Đọc được ' + info.moveNodes + ' nước nhưng không ghép thành ván hợp lệ — ' +
+        'thường là do không phân biệt được ký hiệu quân. Gửi thông tin dưới đây:'
+      : 'Chess.com có thể đã đổi giao diện. Gửi thông tin dưới đây để sửa:'));
 
     var counts = info.counts || {};
     var lines = [
@@ -472,11 +491,14 @@
       var count = group.moves.length;
 
       group.moves.forEach(function (move, position) {
-        var badge = h('div', 'cmp-badge', engineMode ? formatEval(move) : formatPercent(move.share));
+        var badge = h('div', 'cmp-badge');
+        var chip = h('span', 'cmp-badge-text',
+          engineMode ? self.formatScore(move) : formatPercent(move.share));
+        badge.appendChild(chip);
         badge.dataset.uci = move.uci;
         if (engineMode) {
           badge.classList.add('cmp-badge-eval', lossClass(move));
-          badge.title = (move.san || move.uci) + ' — ' + formatEval(move);
+          badge.title = (move.san || move.uci) + ' — ' + scoreDetail(move);
         } else if (move.share >= 25) {
           badge.classList.add('cmp-badge-top');
         } else if (move.share >= 8) {
@@ -485,10 +507,10 @@
 
         if (count > 1) {
           badge.classList.add('cmp-badge-stacked');
-          // Spread the group around the square's centre line.
-          var shift = (position - (count - 1) / 2) * 52;
-          badge.style.transform = 'translateY(' + shift + '%)';
-          badge.textContent = (move.san || '') + ' ' + badge.textContent;
+          // The chips hang from the top corner, so stack downwards from it.
+          badge.style.transform = 'translateY(' + (position * 26) + '%)';
+          // Name the move: the square alone no longer tells them apart.
+          chip.textContent = (move.san || '') + ' ' + chip.textContent;
         }
 
         badge.style.left = 'calc(var(--cmp-square, 48px) * ' + offset.col + ')';
@@ -575,6 +597,9 @@
     Array.prototype.slice.call(els.linesChips.children).forEach(function (chip) {
       chip.classList.toggle('cmp-chip-on', Number(chip.dataset.lines) === settings.engineLines);
     });
+    Array.prototype.slice.call(els.styleChips.children).forEach(function (chip) {
+      chip.classList.toggle('cmp-chip-on', chip.dataset.scoreStyle === settings.scoreStyle);
+    });
     els.badgeToggle.checked = settings.showBoardBadges;
     Array.prototype.slice.call(els.speedChips.children).forEach(function (chip) {
       chip.classList.toggle('cmp-chip-on', settings.speeds.indexOf(chip.dataset.speed) !== -1);
@@ -616,14 +641,44 @@
     else this.renderExplorer();
   };
 
-  /** Score text as a chess GUI writes it: +1.2, -0.4, M3 (mate in three). */
-  function formatEval(move) {
+  /** Score as a chess GUI writes it: +1.2, -0.4, M3 (mate in three). */
+  function formatPawns(move) {
     if (move.mate !== null && move.mate !== undefined) {
       return (move.mate > 0 ? 'M' : '-M') + Math.abs(move.mate);
     }
     var pawns = (move.cp || 0) / 100;
     var digits = Math.abs(pawns) >= 10 ? 0 : 1;
     return (pawns > 0 ? '+' : '') + pawns.toFixed(digits);
+  }
+
+  /**
+   * The same score as a chance of winning, which is what most players can
+   * actually picture. Lichess's curve, fitted to real results: a pawn up is
+   * about 60%, not 100%.
+   */
+  function winPercent(move) {
+    if (move.mate !== null && move.mate !== undefined) return move.mate > 0 ? 100 : 0;
+    var cp = move.cp || 0;
+    return 50 + 50 * (2 / (1 + Math.exp(-0.00368208 * cp)) - 1);
+  }
+
+  function formatWinrate(move) {
+    if (move.mate !== null && move.mate !== undefined) {
+      return (move.mate > 0 ? 'M' : '-M') + Math.abs(move.mate);
+    }
+    return Math.round(winPercent(move)) + '%';
+  }
+
+  UI.prototype.formatScore = function (move) {
+    return this.settings.scoreStyle === 'pawns' ? formatPawns(move) : formatWinrate(move);
+  };
+
+  /** Both readings, for the hover title. */
+  function scoreDetail(move) {
+    if (move.mate !== null && move.mate !== undefined) {
+      return 'Chiếu hết sau ' + Math.abs(move.mate) + ' nước';
+    }
+    return 'Tỉ lệ thắng ' + Math.round(winPercent(move)) + '% · điểm ' + formatPawns(move);
   }
 
   /** How far behind the best move this is — what the badge colour encodes. */
@@ -703,8 +758,9 @@
     row.appendChild(san);
 
     var evalCell = h('div', 'cmp-c-eval');
-    var chip = h('span', 'cmp-eval ' + lossClass(move), formatEval(move));
-    if (!move.best) chip.title = 'Kém hơn nước tốt nhất ' + (move.loss / 100).toFixed(2);
+    var chip = h('span', 'cmp-eval ' + lossClass(move), this.formatScore(move));
+    chip.title = scoreDetail(move) +
+      (move.best ? '' : ' · kém hơn nước tốt nhất ' + (move.loss / 100).toFixed(2));
     evalCell.appendChild(chip);
     row.appendChild(evalCell);
 

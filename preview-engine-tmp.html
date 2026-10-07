@@ -1,0 +1,62 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link rel="stylesheet" href="/src/content/styles.css">
+<style>
+  body { margin:0; background:#312e2b; font-family:system-ui; height:720px; }
+  .wrap { display:flex; gap:24px; padding:28px; }
+  .board { position:relative; width:480px; height:480px; display:grid;
+           grid-template-columns:repeat(8,1fr); grid-template-rows:repeat(8,1fr);
+           border-radius:4px; overflow:hidden; }
+  .sq { display:flex; align-items:center; justify-content:center; font-size:42px; line-height:1; }
+  .l { background:#eeeed2; } .d { background:#769656; }
+</style></head>
+<body>
+<div class="wrap"><div class="board" id="board"></div></div>
+<script>window.chrome = { storage: { sync: { get(k,cb){cb({});}, set(p,cb){cb&&cb();} } } };</script>
+<script src="/src/shared/settings.js"></script>
+<script src="/src/content/ui.js"></script>
+<script>
+var START = [
+  'r.bqk.nr','pppp.ppp','..n.....','..b.p...','..B.P...','.....N..','PPPP.PPP','RNBQK..R'
+];
+var GLYPH = {r:'♜',n:'♞',b:'♝',q:'♛',k:'♚',p:'♟',
+              R:'♖',N:'♘',B:'♗',Q:'♕',K:'♔',P:'♙'};
+var board = document.getElementById('board');
+START.forEach(function (row, r) {
+  row.split('').forEach(function (ch, c) {
+    var sq = document.createElement('div');
+    sq.className = 'sq ' + ((r + c) % 2 ? 'd' : 'l');
+    sq.textContent = GLYPH[ch] || '';
+    board.appendChild(sq);
+  });
+});
+
+var DATA = {
+  total: 4210553, played: 4210553, white: 2010553, draws: 820000, black: 1380000,
+  opening: { eco: 'A00', name: 'Thế cờ ban đầu' },
+  moves: [
+    { uci:'e2e4', san:'e4',  white:950000, draws:300000, black:700000, total:1950000, share:46.3, averageRating:1712 },
+    { uci:'d2d4', san:'d4',  white:580000, draws:260000, black:400000, total:1240000, share:29.4, averageRating:1760 },
+    { uci:'g1f3', san:'Nf3', white:180000, draws:95000,  black:135000, total:410000,  share:9.7,  averageRating:1795 },
+    { uci:'c2c4', san:'c4',  white:150000, draws:80000,  black:110000, total:340000,  share:8.1,  averageRating:1788 },
+    { uci:'g2g3', san:'g3',  white:60000,  draws:30000,  black:50000,  total:140000,  share:3.3,  averageRating:1770 },
+    { uci:'b1c3', san:'Nc3', white:40000,  draws:20000,  black:35000,  total:95000,   share:2.3,  averageRating:1690 }
+  ]
+};
+
+var ENGINE = { status:'ready', depth:18, nodes:4210553, moves:[
+  { uci:'c2c3', san:'c3',  cp:62,  mate:null, loss:0,   best:true,  pvSan:['c3','Nf6','d4','exd4','cxd4','Bb4+'] },
+  { uci:'d2d3', san:'d3',  cp:52,  mate:null, loss:10,  best:false, pvSan:['d3','Nf6','O-O','d6','c3','a6'] },
+  { uci:'b1c3', san:'Nc3', cp:47,  mate:null, loss:15,  best:false, pvSan:['Nc3','Nf6','d3','d6','O-O'] },
+  { uci:'e1g1', san:'O-O', cp:37,  mate:null, loss:25,  best:false, pvSan:['O-O','Nf6','d3','d6','c3'] },
+  { uci:'f3g5', san:'Ng5', cp:-18, mate:null, loss:80,  best:false, pvSan:['Ng5','Nh6','d3','O-O'] },
+  { uci:'h2h4', san:'h4',  cp:-140,mate:null, loss:202, best:false, pvSan:['h4','Nf6','d3','d6'] }
+]};
+var ui = new CMPUI({ onSettingsChange: function () {} });
+ui.setSettings(CMPSettings.normalize({ mode:'engine', engineDepth:18, engineLines:6 }));
+ui.setState({ status:'idle', data:null, engine:ENGINE,
+              position:{ board:board, flipped:false, turn:'w' } });
+ui.setHovered('c2c3');
+window.__ui = ui;
+</script>
+</body></html>

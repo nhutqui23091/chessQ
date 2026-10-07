@@ -38,16 +38,33 @@
   </div>
 </div>
 <script>
-window.setMoves = function (sans) {
+// Piece letters are drawn as images, as Chess.com does: the text of "Nf3"
+// reads only "f3", and "Nxd4" reads only "xd4".
+window.setMoves = function (moves) {
   var list = document.getElementById('moves');
   list.textContent = '';
-  sans.forEach(function (san, i) {
+  moves.forEach(function (move, i) {
     var el = document.createElement('span');
-    el.className = 'a7Bq' + (i === sans.length - 1 ? ' selected' : '');
-    el.textContent = san;
+    el.className = 'a7Bq' + (i === moves.length - 1 ? ' selected' : '');
+    if (move.piece) {
+      var img = document.createElement('img');
+      img.src = 'data:image/gif;base64,R0lGODlhAQABAAAAACw=';
+      img.alt = '';
+      img.width = 12;
+      el.appendChild(img);
+    }
+    el.appendChild(document.createTextNode(move.text));
     list.appendChild(el);
   });
 };
-// 1.e4 e5 2.Nf3 Nc6 3.Bc4 — black to move, an Italian.
-setMoves(['e4', 'e5', 'Nf3', 'Nc6', 'Bc4']);
+// 1.e4 c5 2.Nf3 d6 3.d4 cxd4 4.Nxd4 Nc6 5.Nxc6 bxc6 — an Open Sicilian, with
+// every piece letter missing. "xd4" could be Nxd4 or Qxd4; only after Nxd4 is
+// the later capture on c6 possible, so the reader has to work it out.
+setMoves([
+  { text: 'e4' }, { text: 'c5' },
+  { text: 'f3', piece: 1 }, { text: 'd6' },
+  { text: 'd4' }, { text: 'cxd4' },
+  { text: 'xd4', piece: 1 }, { text: 'c6', piece: 1 },
+  { text: 'xc6', piece: 1 }, { text: 'bxc6' }
+]);
 </script></body></html>
