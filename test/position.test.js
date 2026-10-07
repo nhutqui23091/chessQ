@@ -111,3 +111,40 @@ test('cleanSan strips annotations and normalises castling', () => {
   assert.strictEqual(cleanSan('12.e4'), 'e4');
   assert.strictEqual(cleanSan('♘f3'), 'Nf3');
 });
+
+// --- resilience to Chess.com renaming things ---------------------------------
+
+test('finds the board from the pieces when no known selector matches', () => {
+  // Same pieces, a container this extension has never heard of.
+  const html = boardHtml(START)
+    .replace('<wc-chess-board class="board" data-size="480">', '<div class="brand-new-board" data-size="480">')
+    .replace('</wc-chess-board>', '</div>');
+  const { position } = read(html);
+  assert.ok(position, 'should still read the position');
+  assert.strictEqual(position.fen.split(' ')[0], START.split(' ')[0]);
+  assert.strictEqual(position.board.className, 'brand-new-board');
+});
+
+test('reads pieces that live inside a shadow root', () => {
+  const window = makeWindow('<!doctype html><html><body><div id="host"></div></body></html>');
+  const host = window.document.getElementById('host');
+  const shadow = host.attachShadow({ mode: 'open' });
+  shadow.innerHTML = boardHtml(START);
+  // The board element inside the shadow root needs a size like any other.
+  const position = window.CMPPosition.readPosition();
+  assert.ok(position, 'should see through the shadow root');
+  assert.strictEqual(position.fen.split(' ')[0], START.split(' ')[0]);
+});
+
+test('diagnose reports what it can see', () => {
+  const { window } = read(boardHtml(START));
+  const info = window.CMPPosition.diagnose();
+  assert.strictEqual(info.pieces, 32);
+  assert.ok(info.board);
+  assert.ok(Array.isArray(info.selectors));
+
+  const empty = makeWindow('<!doctype html><html><body><div>nothing</div></body></html>');
+  const none = empty.CMPPosition.diagnose();
+  assert.strictEqual(none.board, null);
+  assert.strictEqual(none.pieces, 0);
+});

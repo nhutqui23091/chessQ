@@ -163,7 +163,14 @@
       currentFen = null;
       if (ui.state.status !== 'no-board') {
         engineState = { status: 'idle', moves: [], depth: 0, reason: null, error: null };
-        ui.setState({ status: 'no-board', data: null, position: null, engine: engineState });
+        ui.setState({
+          status: 'no-board',
+          data: null,
+          position: null,
+          engine: engineState,
+          // Only worth reporting where a board was expected in the first place.
+          diagnosis: root.CMPContext.looksLikeBoardPage() ? root.CMPPosition.diagnose() : null
+        });
       }
       if (boardEl) attachObserver(null);
       return;
@@ -272,7 +279,12 @@
 
     chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
       if (!message || message.type !== 'toggle-panel') return false;
-      var showPanel = !(settings.enabled && settings.showPanel);
+      // Toggle what the user can actually see, not just the stored flag: a
+      // panel hidden because the page has no board must still come back on the
+      // first click, otherwise the toolbar icon appears to do nothing.
+      var visible = settings.enabled && settings.showPanel && !ui.boardlessHidden();
+      var showPanel = !visible;
+      ui.setForcedVisible(showPanel);
       saveSettings({ showPanel: showPanel, enabled: true });
       sendResponse({ ok: true, showPanel: showPanel });
       return false;

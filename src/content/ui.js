@@ -44,6 +44,10 @@
     this.settings = root.CMPSettings.DEFAULTS;
     this.state = { status: 'idle', data: null, position: null };
     this.hoveredUci = null;
+    // Set when the user explicitly asks for the panel (toolbar icon / Alt+P).
+    // An explicit request always wins over the "no board here" auto-hide,
+    // otherwise clicking the icon appears to do nothing at all.
+    this.forcedVisible = false;
     this.panel = null;
     this.overlay = null;
     this.frame = null;
@@ -108,12 +112,14 @@
     head.appendChild(close);
 
     var body = h('div', 'cmp-body');
+    var diagnosis = h('div', 'cmp-diagnosis');
     var meta = h('div', 'cmp-meta');
     var totals = h('div', 'cmp-totals');
     var list = h('div', 'cmp-moves');
     var status = h('div', 'cmp-status');
     var settingsBox = this.buildSettings();
 
+    body.appendChild(diagnosis);
     body.appendChild(meta);
     body.appendChild(totals);
     body.appendChild(settingsBox);
@@ -134,6 +140,7 @@
       modes: modes,
       collapse: collapse,
       meta: meta,
+      diagnosis: diagnosis,
       totals: totals,
       list: list,
       status: status
@@ -357,6 +364,50 @@
     this.overlay.style.setProperty('--cmp-font', Math.max(9, Math.min(18, rect.width / 8 * 0.3)) + 'px');
   };
 
+  /**
+   * Shown when a page that ought to have a board does not appear to have one.
+   * Without this the panel simply vanished, which told nobody anything.
+   */
+  UI.prototype.renderDiagnosis = function () {
+    var box = this.els.diagnosis;
+    var info = this.state.diagnosis;
+    box.textContent = '';
+    if (this.state.status !== 'no-board' || !info) {
+      box.style.display = 'none';
+      return;
+    }
+    box.style.display = '';
+
+    box.appendChild(h('div', 'cmp-diag-title', 'Không đọc được bàn cờ'));
+    box.appendChild(h('div', 'cmp-diag-hint',
+      'Chess.com có thể đã đổi giao diện. Gửi thông tin dưới đây để sửa:'));
+
+    var lines = [
+      'trang: ' + info.url,
+      'quân cờ tìm thấy: ' + info.pieces,
+      'ô square-XX: ' + info.squares,
+      'nước trong danh sách: ' + info.moveNodes,
+      'shadow root: ' + info.shadowRoots,
+      info.selectors.join('  ')
+    ];
+    var pre = h('div', 'cmp-diag-body', lines.join('\n'));
+    box.appendChild(pre);
+
+    var copy = h('button', 'cmp-diag-copy', 'Sao chép');
+    copy.addEventListener('click', function () {
+      var text = JSON.stringify(info, null, 2);
+      try {
+        navigator.clipboard.writeText(text).then(function () {
+          copy.textContent = 'Đã chép';
+          setTimeout(function () { copy.textContent = 'Sao chép'; }, 1500);
+        });
+      } catch (err) {
+        copy.textContent = 'Không chép được';
+      }
+    });
+    box.appendChild(copy);
+  };
+
   UI.prototype.engineState = function () {
     return this.state.engine || { status: 'idle', moves: [] };
   };
@@ -538,6 +589,15 @@
     this.positionOverlay();
   };
 
+  UI.prototype.setForcedVisible = function (forced) {
+    this.forcedVisible = !!forced;
+    this.render();
+  };
+
+  UI.prototype.boardlessHidden = function () {
+    return this.state.status === 'no-board' && !this.state.diagnosis && !this.forcedVisible;
+  };
+
   UI.prototype.setState = function (state) {
     this.state = state;
     this.render();
@@ -587,9 +647,10 @@
     } else if (engine.status === 'thinking' && !moves.length) {
       statusText = 'Đang tính…';
     } else if (this.state.status === 'no-board') {
-      statusText = 'Không tìm thấy bàn cờ trên trang này.';
-      this.panel.classList.add('cmp-boardless');
+      this.panel.classList.toggle('cmp-boardless', this.boardlessHidden());
+      if (!this.state.diagnosis) statusText = 'Trang này không có bàn cờ. Mở một ván cờ để bắt đầu.';
     }
+    this.renderDiagnosis();
     els.status.textContent = statusText;
     els.status.style.display = statusText ? '' : 'none';
 
@@ -655,16 +716,20 @@
 
     var statusText = '';
     if (status === 'loading') statusText = 'Đang tải…';
-    else if (status === 'no-board') statusText = 'Không tìm thấy bàn cờ trên trang này.';
+    else if (status === 'no-board') {
+      statusText = this.state.diagnosis ? '' : 'Trang này không có bàn cờ. Mở một ván cờ để bắt đầu.';
+    }
     else if (status === 'error') statusText = 'Lỗi: ' + (this.state.error || 'không tải được dữ liệu');
     else if (status === 'ready' && data && !data.moves.length) {
       statusText = 'Không có dữ liệu cho thế cờ này (đã ra khỏi sách khai cuộc).';
     }
     els.status.textContent = statusText;
     els.status.style.display = statusText ? '' : 'none';
-    // Chess.com pages without a board (home, forums, profiles) should not carry
-    // a floating panel around.
-    this.panel.classList.toggle('cmp-boardless', status === 'no-board');
+    // Hide the panel on pages that simply have no board (home, forums,
+    // profiles) — but stay visible, with a diagnosis, where one was expected,
+    // and whenever the user asked for it by hand.
+    this.panel.classList.toggle('cmp-boardless', this.boardlessHidden());
+    this.renderDiagnosis();
 
     var position = this.state.position;
     var metaParts = [];

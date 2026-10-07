@@ -59,6 +59,20 @@ Chưa có trên Chrome Web Store, cài thủ công:
 
 Không cần build: `chess.bundle.js` và Stockfish đã đóng gói sẵn trong repo.
 
+## Kiểm tra tiện ích đã chạy chưa
+
+1. Mở `chrome://extensions`, bật **Developer mode**, bấm **Load unpacked** rồi
+   chọn thư mục repo. Thẻ tiện ích phải hiện **Chess Move %** và không có chữ
+   **Errors** màu đỏ.
+2. Sau mỗi lần `git pull`, bấm nút **⟳ Reload** trên thẻ đó — Chrome không tự
+   nạp lại mã mới.
+3. Mở `chess.com/play/computer`. Bảng hiện ở góc dưới bên phải.
+4. Không thấy gì? Bấm biểu tượng tiện ích trên thanh công cụ (hoặc **Alt+P**) —
+   bảng luôn hiện ra khi bạn bấm, kể cả khi trang không có bàn cờ.
+5. Nếu bảng hiện khung vàng **"Không đọc được bàn cờ"**, bấm **Sao chép** và gửi
+   nội dung đó — đó là thông tin cần để sửa selector cho đúng giao diện mới của
+   Chess.com.
+
 ## Sử dụng
 
 * **Alt+P** hoặc bấm biểu tượng tiện ích: ẩn/hiện bảng.
@@ -110,7 +124,9 @@ nhập thành từ vị trí vua/xe, và ô bắt tốt qua đường chỉ khi 
 
 ```bash
 npm install          # chỉ cần cho test và script build
-npm test             # 97 test: đọc thế cờ, UCI, cổng fair play, API, giao diện, manifest
+npm test             # 102 test: đọc thế cờ, UCI, cổng fair play, API, giao diện, manifest
+npm i -D playwright  # chỉ cần cho test:e2e
+npm run test:e2e     # nạp tiện ích thật vào Chromium thật, chạy Stockfish thật
 npm run icons        # tạo lại icons/*.png
 npm run zip          # đóng gói dist/chess-move-percent-<version>.zip
 npm run bundle:chess # đóng gói lại chess.js
@@ -119,6 +135,12 @@ npm run bundle:chess # đóng gói lại chess.js
 Test chạy giao diện, bộ đọc thế cờ và cổng fair play trong jsdom với HTML giả
 lập giống Chess.com; service worker và bộ phân tích UCI chạy trong sandbox `vm`
 — không cần trình duyệt hay mạng.
+
+`npm run test:e2e` thì khác: nó nạp **tiện ích thật** vào **Chromium thật**
+(`test/e2e/`), kiểm tra manifest nạp được, service worker khởi động, bảng hiện
+ra, Stockfish thật chấm điểm 4 nước ở độ sâu 14, và engine từ chối chạy ở trang
+đấu với người. Đây là thứ duy nhất bắt được lỗi "tiện ích không nạp được" —
+loại lỗi mà test jsdom không thấy.
 
 ### Cấu trúc thư mục
 
@@ -138,12 +160,19 @@ src/vendor/chess.bundle.js        chess.js đã đóng gói (BSD-2-Clause)
 src/vendor/stockfish/             Stockfish WASM (GPL-3.0)
 tools/                            sinh icon, đóng gói .zip
 test/                             test chạy bằng node:test + jsdom
+test/e2e/                         test nạp tiện ích thật vào Chromium thật
 ```
 
 ### Khi Chess.com đổi giao diện
 
-Nếu bảng báo "Không tìm thấy bàn cờ", thường chỉ cần thêm selector mới vào
-`BOARD_SELECTORS` hoặc `MOVE_LIST_SELECTORS` ở đầu `src/content/position.js`.
+Tiện ích tìm bàn cờ theo ba lớp: danh sách selector đã biết, rồi mọi shadow
+root, rồi — nếu vẫn không thấy — lấy phần tử cha chung của tất cả quân cờ
+`.piece.square-XX` trên trang. Lớp cuối sống sót qua phần lớn các lần Chess.com
+đổi tên lớp CSS.
+
+Nếu vẫn hỏng, bảng sẽ hiện khung chẩn đoán (số quân cờ, số ô, selector nào khớp)
+thay vì biến mất. Thường chỉ cần thêm selector mới vào `BOARD_SELECTORS` hoặc
+`MOVE_LIST_SELECTORS` ở đầu `src/content/position.js`.
 Nếu Chess.com đổi đường dẫn trang đấu với máy, cập nhật `ALLOWED_CONTEXTS`
 trong `src/content/context.js`; nếu nút đầu hàng đổi tên thì sửa
 `LIVE_CONTROL_SELECTORS` ngay dưới đó — đó là thứ giữ cho engine không chạy

@@ -1,0 +1,68 @@
+<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>Chơi với Bot</title>
+<!--
+  A stand-in for a Chess.com game page: same board element, same piece classes
+  (piece wp square-52), same move list nodes, same resign button. The end-to-end
+  run serves it at /play/computer, /analysis and /play/online so the extension
+  sees realistic URLs.
+-->
+<style>
+ body{margin:0;background:#312e2b;font-family:system-ui;color:#eee}
+ .layout{display:flex;gap:20px;padding:20px}
+ wc-chess-board{position:relative;display:grid;width:480px;height:480px;
+   grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr)}
+ .sq{display:flex;align-items:center;justify-content:center;font-size:40px}
+ .l{background:#eeeed2}.d{background:#769656}
+ .piece{position:absolute;width:12.5%;height:12.5%;display:flex;align-items:center;
+   justify-content:center;font-size:40px;line-height:1;color:#000}
+ .side{width:300px}
+ button{padding:8px 14px;margin-right:8px}
+</style></head><body>
+<div class="layout">
+  <wc-chess-board class="board" id="board-play-computer"></wc-chess-board>
+  <div class="side">
+    <h3>Chơi với Bot</h3>
+    <wc-simple-move-list class="move-list" id="movelist"></wc-simple-move-list>
+    <div class="live-game-buttons-component">
+      <button data-cy="resign-button">Đầu hàng</button>
+      <button>Đi lại</button>
+    </div>
+  </div>
+</div>
+<script>
+// Renders a FEN the way chess.com does: absolutely positioned .piece elements
+// carrying a square-FR class, inside <wc-chess-board>.
+var GLYPH={r:'♜',n:'♞',b:'♝',q:'♛',k:'♚',p:'♟',
+           R:'♖',N:'♘',B:'♗',Q:'♕',K:'♔',P:'♙'};
+var CODE={r:'br',n:'bn',b:'bb',q:'bq',k:'bk',p:'bp',
+          R:'wr',N:'wn',B:'wb',Q:'wq',K:'wk',P:'wp'};
+var board=document.getElementById('board-play-computer');
+window.setFen=function(fen){
+  board.textContent='';
+  for(var i=0;i<64;i++){var r=Math.floor(i/8),c=i%8;var sq=document.createElement('div');
+    sq.className='sq '+((r+c)%2?'d':'l');board.appendChild(sq);}
+  fen.split(' ')[0].split('/').forEach(function(row,index){
+    var rank=8-index,file=1;
+    row.split('').forEach(function(ch){
+      if(/\d/.test(ch)){file+=Number(ch);return;}
+      var el=document.createElement('div');
+      el.className='piece '+CODE[ch]+' square-'+file+rank;
+      el.textContent=GLYPH[ch];
+      el.style.left=((file-1)*12.5)+'%';
+      el.style.top=((8-rank)*12.5)+'%';
+      board.appendChild(el);file+=1;});
+  });
+};
+window.setMoves=function(sans){
+  var list=document.getElementById('movelist');
+  list.textContent='';
+  sans.forEach(function(san,i){
+    var node=document.createElement('div');
+    node.className='node'+(i===sans.length-1?' selected':'');
+    node.setAttribute('data-ply',String(i+1));
+    node.textContent=san;
+    list.appendChild(node);});
+};
+// 1.e4 c5 — the Sicilian from the user's screenshot, white to move after 1...c5
+setFen('rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2');
+setMoves(['e4','c5']);
+</script></body></html>

@@ -28,8 +28,11 @@
     '#board-board',
     '#board-single',
     '#board-play-computer',
+    '#board-layout-chessboard .board',
+    '[class*="board-layout"] [class*="board"]',
     '.board'
   ];
+  var SQUARE_CLASS_RE = /\bsquare-[1-8][1-8]\b/;
   var MOVE_LIST_SELECTORS = [
     'wc-simple-move-list',
     'wc-vertical-move-list',
@@ -56,12 +59,62 @@
     return rect.width > 40 && rect.height > 40;
   }
 
+  /**
+   * Every root to search: the document plus any open shadow roots. Chess.com
+   * renders the board as a custom element, and a future version of it could
+   * put the pieces inside a shadow root where a plain querySelector cannot
+   * reach them.
+   */
+  function roots() {
+    var all = [document];
+    var hosts = document.querySelectorAll('*');
+    for (var i = 0; i < hosts.length; i++) {
+      if (hosts[i].shadowRoot) all.push(hosts[i].shadowRoot);
+    }
+    return all;
+  }
+
+  function queryAll(selector) {
+    var out = [];
+    var scopes = roots();
+    for (var i = 0; i < scopes.length; i++) {
+      var found = scopes[i].querySelectorAll(selector);
+      for (var j = 0; j < found.length; j++) out.push(found[j]);
+    }
+    return out;
+  }
+
+  /** Every piece element on the page, wherever it lives. */
+  function allPieceElements() {
+    return queryAll('[class*="square-"]').filter(function (el) {
+      var cls = classNameOf(el);
+      return cls.indexOf('piece') !== -1 && SQUARE_CLASS_RE.test(cls);
+    });
+  }
+
+  function closestCommonAncestor(elements) {
+    if (!elements.length) return null;
+    var ancestor = elements[0].parentElement;
+    while (ancestor) {
+      var holdsAll = true;
+      for (var i = 1; i < elements.length; i++) {
+        if (!ancestor.contains(elements[i])) {
+          holdsAll = false;
+          break;
+        }
+      }
+      if (holdsAll) return ancestor;
+      ancestor = ancestor.parentElement;
+    }
+    return null;
+  }
+
   /** The biggest visible board on the page (there is normally exactly one). */
   function findBoard() {
     var best = null;
     var bestArea = 0;
     for (var i = 0; i < BOARD_SELECTORS.length; i++) {
-      var found = document.querySelectorAll(BOARD_SELECTORS[i]);
+      var found = queryAll(BOARD_SELECTORS[i]);
       for (var j = 0; j < found.length; j++) {
         var el = found[j];
         if (!isVisible(el)) continue;
@@ -75,7 +128,37 @@
       }
       if (best) break; // earlier selectors are the more specific ones
     }
-    return best;
+    if (best) return best;
+
+    // Nothing matched a known selector — Chess.com may have renamed things. The
+    // pieces themselves are the one thing that cannot change without breaking
+    // the site, so fall back to whatever element contains them all.
+    var pieces = allPieceElements();
+    if (pieces.length < 2) return null;
+    var ancestor = closestCommonAncestor(pieces);
+    return ancestor && isVisible(ancestor) ? ancestor : null;
+  }
+
+  /**
+   * What the extension can see on this page. Shown in the panel when no board
+   * is found, so a user can report something specific instead of "it does not
+   * work".
+   */
+  function diagnose() {
+    var board = findBoard();
+    var selectorHits = BOARD_SELECTORS.map(function (selector) {
+      return selector + ':' + queryAll(selector).length;
+    });
+    var moveList = readMoveList();
+    return {
+      url: location.pathname,
+      board: board ? board.tagName.toLowerCase() + '.' + classNameOf(board).split(/\s+/).join('.') : null,
+      pieces: allPieceElements().length,
+      squares: queryAll('[class*="square-"]').length,
+      moveNodes: moveList ? moveList.sans.length : 0,
+      shadowRoots: roots().length - 1,
+      selectors: selectorHits
+    };
   }
 
   function isFlipped(boardEl) {
@@ -348,6 +431,8 @@
   root.CMPPosition = {
     readPosition: readPosition,
     findBoard: findBoard,
+    diagnose: diagnose,
+    allPieceElements: allPieceElements,
     isFlipped: isFlipped,
     scanPieces: scanPieces,
     placementOf: placementOf,

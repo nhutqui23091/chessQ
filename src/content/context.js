@@ -41,6 +41,14 @@
     '[class*="resign-button"]'
   ];
 
+  // Pages that are supposed to show a board. On anything else (home, forums,
+  // profiles) a missing board is normal and the panel stays out of the way.
+  var BOARD_PAGE = /^\/(play|game|games|analysis|puzzles|live|daily|variants|lessons|events|openings|practice)(\/|$)/;
+
+  function looksLikeBoardPage(pathname) {
+    return BOARD_PAGE.test(pathname || root.location.pathname);
+  }
+
   function matchContext(pathname) {
     var path = pathname || root.location.pathname;
     for (var i = 0; i < ALLOWED_CONTEXTS.length; i++) {
@@ -82,6 +90,7 @@
 
   root.CMPContext = {
     engineStatus: engineStatus,
+    looksLikeBoardPage: looksLikeBoardPage,
     matchContext: matchContext,
     isAnalysisPath: isAnalysisPath,
     hasLiveGameControls: hasLiveGameControls,

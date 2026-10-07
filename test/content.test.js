@@ -88,12 +88,32 @@ test('toggling from the toolbar hides and restores the panel', async (t) => {
   assert.strictEqual(stored.showPanel, true);
 });
 
-test('reports when there is no board on the page', async (t) => {
-  const { window, sent } = boot(t, '<div>chess.com home page</div>');
+test('stays out of the way on pages that have no board', async (t) => {
+  const context = makeContentWindow(
+    '<!doctype html><html><body><div>chess.com home page</div></body></html>',
+    DATA, { url: 'https://www.chess.com/' }
+  );
+  t.after(() => context.window.close());
+  await wait(450);
+  assert.strictEqual(context.sent.length, 0);
+  assert.ok(context.window.document.querySelector('.cmp-panel').classList.contains('cmp-boardless'));
+  assert.strictEqual(context.window.document.querySelector('.cmp-diagnosis').style.display, 'none');
+});
+
+test('reports what it saw when a game page has no readable board', async (t) => {
+  // A game page whose board markup the extension cannot read: the panel has to
+  // stay visible and say so, otherwise the user sees nothing at all.
+  const { window, sent } = boot(t, '<div class="board-wrapper">new markup</div>');
   await wait(450);
   assert.strictEqual(sent.length, 0);
-  assert.match(window.document.querySelector('.cmp-status').textContent, /Không tìm thấy bàn cờ/);
-  assert.ok(window.document.querySelector('.cmp-panel').classList.contains('cmp-boardless'));
+  const panel = window.document.querySelector('.cmp-panel');
+  assert.ok(!panel.classList.contains('cmp-boardless'), 'panel must stay visible');
+  const diagnosis = window.document.querySelector('.cmp-diagnosis');
+  assert.strictEqual(diagnosis.style.display, '');
+  assert.match(diagnosis.textContent, /Không đọc được bàn cờ/);
+  assert.match(diagnosis.textContent, /quân cờ tìm thấy: 0/);
+  assert.match(diagnosis.textContent, /\/play\/online/);
+  assert.ok(window.document.querySelector('.cmp-diag-copy'));
 });
 
 test('changing a filter re-queries the same position', async (t) => {
@@ -109,4 +129,20 @@ test('changing a filter re-queries the same position', async (t) => {
   assert.strictEqual(sent.length, 2);
   assert.strictEqual(sent[1].settings.database, 'masters');
   assert.strictEqual(sent[1].fen, START_FEN);
+});
+
+test('the toolbar toggle shows the panel even where there is no board', async (t) => {
+  const context = makeContentWindow(
+    '<!doctype html><html><body><div>chess.com home page</div></body></html>',
+    DATA, { url: 'https://www.chess.com/' }
+  );
+  t.after(() => context.window.close());
+  await wait(450);
+  const panel = context.window.document.querySelector('.cmp-panel');
+  assert.ok(panel.classList.contains('cmp-boardless'));
+
+  // Clicking the extension icon must do something visible, not nothing.
+  context.messageListeners.forEach((fn) => fn({ type: 'toggle-panel' }, {}, () => {}));
+  assert.ok(!panel.classList.contains('cmp-boardless'));
+  assert.match(context.window.document.querySelector('.cmp-status').textContent, /Mở một ván cờ/);
 });
