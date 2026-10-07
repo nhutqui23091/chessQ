@@ -190,3 +190,77 @@ test('waits for the engine to answer before sending work', async (t) => {
   await pending;
   assert.strictEqual(resolved, true);
 });
+
+// --- when the explorer refuses -------------------------------------------
+
+function errorResponse(status, body, type) {
+  return {
+    ok: false,
+    status: status,
+    headers: { get: () => null },
+    text: async () => body,
+    json: async () => (type === 'json' ? JSON.parse(body) : {})
+  };
+}
+
+test('the reason the server gave is kept, not just the status', async (t) => {
+  const { sandbox } = loadServiceWorker(async () =>
+    errorResponse(401, '{"error":"token required"}'));
+  const result = await sandbox.lookup(FEN, settings());
+  assert.strictEqual(result.ok, false);
+  assert.match(result.error, /401/);
+  assert.match(result.error, /token required/);
+});
+
+test('an HTML error page is reduced to its text', async (t) => {
+  const { sandbox } = loadServiceWorker(async () =>
+    errorResponse(403, '<html><body><h1>Forbidden</h1><p>blocked by proxy</p></body></html>'));
+  const result = await sandbox.lookup(FEN, settings());
+  assert.match(result.error, /Forbidden blocked by proxy/);
+  assert.ok(!/</.test(result.error), result.error);
+});
+
+test('a refused query is retried without its filters', async (t) => {
+  let seen = 0;
+  const { sandbox, calls } = loadServiceWorker(async (url) => {
+    seen += 1;
+    // The filtered query is refused; the bare one is served.
+    return url.includes('ratings=')
+      ? errorResponse(401, 'nope')
+      : jsonResponse(SAMPLE);
+  });
+  const result = await sandbox.lookup(FEN, settings());
+  assert.strictEqual(result.ok, true, 'should fall back rather than fail');
+  assert.strictEqual(result.degraded, true);
+  assert.match(result.reason, /401/);
+  assert.strictEqual(calls.length, 2);
+  assert.ok(!calls[1].includes('ratings='), calls[1]);
+  assert.ok(calls[1].includes('fen='));
+});
+
+test('both failing is reported with both reasons', async (t) => {
+  const { sandbox } = loadServiceWorker(async () => errorResponse(401, 'nope'));
+  const result = await sandbox.lookup(FEN, settings());
+  assert.strictEqual(result.ok, false);
+  assert.match(result.error, /401/);
+  assert.match(result.alsoFailed, /401/);
+});
+
+test('a server error is not retried bare — it is not the query at fault', async (t) => {
+  const { sandbox, calls } = loadServiceWorker(async () => errorResponse(500, 'boom'));
+  const result = await sandbox.lookup(FEN, settings());
+  assert.strictEqual(result.ok, false);
+  assert.match(result.error, /500/);
+  assert.strictEqual(calls.length, 1, 'one attempt, no bare retry');
+  assert.ok(!result.alsoFailed);
+});
+
+test('the masters database gets the same second chance', async (t) => {
+  const { sandbox, calls } = loadServiceWorker(async (url) =>
+    url.includes('moves=') ? errorResponse(401, 'nope') : jsonResponse(SAMPLE));
+  const result = await sandbox.lookup(FEN, settings({ database: 'masters' }));
+  assert.strictEqual(result.ok, true);
+  assert.strictEqual(result.degraded, true);
+  assert.strictEqual(calls.length, 2);
+  assert.ok(calls[1].includes('/masters?fen='), calls[1]);
+});

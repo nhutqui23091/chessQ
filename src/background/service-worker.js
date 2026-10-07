@@ -34,10 +34,18 @@ var cache = new Map();
 var inFlight = new Map();
 var lastRequestAt = 0;
 
-function buildUrl(fen, settings) {
+/**
+ * @param minimal strips every optional parameter, leaving just the position.
+ *        Used as a second attempt when the explorer rejects a request: if the
+ *        bare query works, one of the filters was what it objected to, and
+ *        statistics without filters beat no statistics at all.
+ */
+function buildUrl(fen, settings, minimal) {
   var database = settings.database === 'masters' ? 'masters' : 'lichess';
   var url = new URL(ENDPOINTS[database]);
   url.searchParams.set('fen', fen);
+  if (minimal) return url.toString();
+
   url.searchParams.set('moves', '12');
   url.searchParams.set('topGames', '0');
   if (database === 'lichess') {
@@ -79,6 +87,25 @@ async function throttle() {
   lastRequestAt = Date.now();
 }
 
+/**
+ * The reason a request was refused, as the server stated it. Throwing away
+ * the body and reporting only "HTTP 401" leaves nobody anything to act on —
+ * which is exactly what happened to a user hitting a 401 in a live game.
+ */
+async function readErrorBody(response) {
+  try {
+    var text = (await response.text()).trim();
+    if (!text) return '';
+    try {
+      var parsed = JSON.parse(text);
+      if (parsed && parsed.error) return String(parsed.error).slice(0, 180);
+    } catch (err) { /* not JSON */ }
+    return text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 180);
+  } catch (err) {
+    return '';
+  }
+}
+
 async function requestOnce(url) {
   await throttle();
   var response = await fetch(url, { headers: { Accept: 'application/json' } });
@@ -86,10 +113,14 @@ async function requestOnce(url) {
     var retryAfter = Number(response.headers.get('Retry-After')) || 4;
     var err = new Error('rate-limited');
     err.retryAfterMs = Math.min(retryAfter * 1000, 20000);
+    err.status = response.status;
     throw err;
   }
   if (!response.ok) {
-    throw new Error('Explorer HTTP ' + response.status);
+    var detail = await readErrorBody(response);
+    var failure = new Error('HTTP ' + response.status + (detail ? ' — ' + detail : ''));
+    failure.status = response.status;
+    throw failure;
   }
   return response.json();
 }
@@ -144,6 +175,10 @@ function shape(raw) {
   };
 }
 
+// Statuses that mean "this request", not "this service": worth one more try
+// with the filters removed.
+var REFUSED = [400, 401, 403, 404, 422];
+
 async function lookup(fen, settings) {
   var url = buildUrl(fen, settings);
   var cached = cacheGet(url);
@@ -157,8 +192,24 @@ async function lookup(fen, settings) {
       cacheSet(url, data);
       return { ok: true, data: data, cached: false };
     })
-    .catch(function (err) {
-      return { ok: false, error: err && err.message ? err.message : String(err) };
+    .catch(async function (err) {
+      var bare = buildUrl(fen, settings, true);
+      if (REFUSED.indexOf(err && err.status) === -1 || bare === url) {
+        return { ok: false, error: err && err.message ? err.message : String(err) };
+      }
+      try {
+        var raw = await fetchExplorer(bare);
+        var data = shape(raw);
+        cacheSet(url, data);
+        // The caller is told the filters did not survive, so the panel can say so.
+        return { ok: true, data: data, cached: false, degraded: true, reason: err.message };
+      } catch (second) {
+        return {
+          ok: false,
+          error: err.message,
+          alsoFailed: second && second.message ? second.message : String(second)
+        };
+      }
     })
     .finally(function () {
       inFlight.delete(url);

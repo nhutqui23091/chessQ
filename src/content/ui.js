@@ -836,6 +836,32 @@
     return row;
   };
 
+  /**
+   * A refusal from the explorer, in terms a user can act on. "Explorer HTTP
+   * 401" told a user nothing; what the server said, and what it means for
+   * them, is the useful part.
+   */
+  function explorerErrorText(state) {
+    var raw = String(state.error || '');
+    var code = /HTTP (\d{3})/.exec(raw);
+    var status = code ? Number(code[1]) : 0;
+    var detail = raw.replace(/^HTTP \d{3}\s*(—\s*)?/, '').trim();
+
+    if (status === 401 || status === 403) {
+      return 'Lichess từ chối yêu cầu (' + status + ')' +
+        (detail ? ': ' + detail : '') +
+        '. Thường là do mạng hoặc tiện ích khác chặn; thử đổi sang nguồn ' +
+        '"Ván của kiện tướng" trong ⚙, hoặc tắt VPN/DNS chặn quảng cáo.';
+    }
+    if (status === 429) {
+      return 'Lichess đang giới hạn tốc độ. Chờ một lát rồi thử lại.';
+    }
+    if (/Failed to fetch|NetworkError/i.test(raw)) {
+      return 'Không kết nối được tới Lichess. Kiểm tra mạng hoặc tường lửa.';
+    }
+    return 'Lỗi khi tải thống kê: ' + (raw || 'không rõ');
+  }
+
   UI.prototype.renderExplorer = function () {
     var self = this;
     var els = this.els;
@@ -847,7 +873,7 @@
     else if (status === 'no-board') {
       statusText = this.state.diagnosis ? '' : 'Trang này không có bàn cờ. Mở một ván cờ để bắt đầu.';
     }
-    else if (status === 'error') statusText = 'Lỗi: ' + (this.state.error || 'không tải được dữ liệu');
+    else if (status === 'error') statusText = explorerErrorText(this.state);
     else if (status === 'ready' && data && !data.moves.length) {
       statusText = 'Không có dữ liệu cho thế cờ này (đã ra khỏi sách khai cuộc).';
     }
@@ -861,6 +887,7 @@
 
     var position = this.state.position;
     var metaParts = [];
+    if (this.state.degraded) metaParts.push('không áp dụng được bộ lọc');
     if (data && data.opening && data.opening.name) {
       metaParts.push((data.opening.eco ? data.opening.eco + ' ' : '') + data.opening.name);
     }

@@ -138,7 +138,7 @@ nhập thành từ vị trí vua/xe, và ô bắt tốt qua đường chỉ khi 
 
 ```bash
 npm install          # chỉ cần cho test và script build
-npm test             # 137 test: đọc thế cờ, UCI, cổng fair play, API, giao diện, manifest
+npm test             # 146 test: đọc thế cờ, UCI, cổng fair play, API, giao diện, manifest
 npm i -D playwright  # chỉ cần cho test:e2e
 npm run test:e2e     # nạp tiện ích thật vào Chromium thật, chạy Stockfish thật
 npm run icons        # tạo lại icons/*.png
@@ -176,6 +176,14 @@ tools/                            sinh icon, đóng gói .zip
 test/                             test chạy bằng node:test + jsdom
 test/e2e/                         test nạp tiện ích thật vào Chromium thật
 ```
+
+### Khi Lichess từ chối yêu cầu
+
+Nếu bảng báo *"Lichess từ chối yêu cầu (401/403)"*, tiện ích đã tự thử lại một
+lần với truy vấn trần (chỉ còn thế cờ, bỏ hết bộ lọc thể loại/Elo). Nếu lần đó
+chạy được thì vẫn hiện thống kê và ghi "không áp dụng được bộ lọc". Nếu vẫn
+hỏng, thông báo sẽ kèm **nguyên văn lý do server trả về** — đó là thứ cần để
+biết là mạng chặn, VPN, DNS lọc quảng cáo, hay Lichess đổi API.
 
 ### Khi Chess.com đổi giao diện
 

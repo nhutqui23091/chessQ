@@ -129,3 +129,39 @@ test('the panel is hidden when the extension is switched off', (t) => {
   const { window } = setup(t, { enabled: false });
   assert.ok(window.document.querySelector('.cmp-panel').classList.contains('cmp-hidden'));
 });
+
+// --- what a refusal from the explorer looks like -----------------------------
+
+test('a 401 is explained, not just numbered', (t) => {
+  const { window, ui } = setup(t);
+  ui.setState({
+    status: 'error', data: null, position: null,
+    error: 'HTTP 401 — token required'
+  });
+  const text = window.document.querySelector('.cmp-status').textContent;
+  assert.match(text, /Lichess từ chối/);
+  assert.match(text, /401/);
+  assert.match(text, /token required/, 'the server reason reaches the user');
+  assert.match(text, /kiện tướng|VPN/, 'and something to try');
+});
+
+test('rate limiting and network loss read differently', (t) => {
+  const { window, ui } = setup(t);
+  ui.setState({ status: 'error', data: null, position: null, error: 'HTTP 429' });
+  assert.match(window.document.querySelector('.cmp-status').textContent, /giới hạn tốc độ/);
+
+  ui.setState({ status: 'error', data: null, position: null, error: 'Failed to fetch' });
+  assert.match(window.document.querySelector('.cmp-status').textContent, /Không kết nối được/);
+});
+
+test('dropped filters are admitted rather than hidden', (t) => {
+  const { window, ui } = setup(t);
+  ui.setState({
+    status: 'ready', data: DATA,
+    position: { board: window.document.querySelector('wc-chess-board'), flipped: false, turn: 'w' },
+    degraded: 'HTTP 401'
+  });
+  assert.match(window.document.querySelector('.cmp-meta').textContent, /không áp dụng được bộ lọc/);
+  // The statistics are still shown.
+  assert.strictEqual(window.document.querySelectorAll('.cmp-row:not(.cmp-row-head)').length, 3);
+});

@@ -130,11 +130,18 @@
         }
         if (!response.ok) {
           ui.setState({
-            status: 'error', data: null, position: position, engine: engineState, error: response.error
+            status: 'error', data: null, position: position, engine: engineState,
+            error: response.error, alsoFailed: response.alsoFailed
           });
           return;
         }
-        ui.setState({ status: 'ready', data: response.data, position: position, engine: engineState });
+        ui.setState({
+          status: 'ready',
+          data: response.data,
+          position: position,
+          engine: engineState,
+          degraded: response.degraded ? response.reason : null
+        });
       });
     } catch (err) {
       // Happens when the extension is reloaded while the page stays open.
