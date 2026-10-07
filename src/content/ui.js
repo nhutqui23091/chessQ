@@ -382,16 +382,24 @@
     box.appendChild(h('div', 'cmp-diag-hint',
       'Chess.com có thể đã đổi giao diện. Gửi thông tin dưới đây để sửa:'));
 
+    var counts = info.counts || {};
     var lines = [
-      'trang: ' + info.url,
-      'quân cờ tìm thấy: ' + info.pieces,
-      'ô square-XX: ' + info.squares,
-      'nước trong danh sách: ' + info.moveNodes,
-      'shadow root: ' + info.shadowRoots,
-      info.selectors.join('  ')
+      'trang: ' + info.url + '   bản: ' + (info.version || '?'),
+      'quân cờ: ' + info.pieces + '   ô square-XX: ' + info.squares +
+        '   nước: ' + info.moveNodes,
+      'class*=piece: ' + (counts['class*=piece'] || 0) +
+        '   data-piece: ' + (counts['data-piece'] || 0) +
+        '   svg: ' + (counts.svg || 0) +
+        '   canvas: ' + (counts.canvas || 0),
+      'iframe: ' + ((info.frames && info.frames.length) || 0) +
+        '   shadow root: ' + info.shadowRoots,
+      info.boardTree
+        ? 'bàn cờ: ' + info.boardTree.self + ' (' + info.boardTree.descendants + ' phần tử con)'
+        : 'không thấy phần tử nào giống bàn cờ'
     ];
-    var pre = h('div', 'cmp-diag-body', lines.join('\n'));
-    box.appendChild(pre);
+    box.appendChild(h('div', 'cmp-diag-body', lines.join('\n')));
+    box.appendChild(h('div', 'cmp-diag-hint',
+      'Nút Sao chép lấy đầy đủ cấu trúc HTML — dán nguyên cho người sửa.'));
 
     var copy = h('button', 'cmp-diag-copy', 'Sao chép');
     copy.addEventListener('click', function () {

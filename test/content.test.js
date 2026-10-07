@@ -111,7 +111,7 @@ test('reports what it saw when a game page has no readable board', async (t) => 
   const diagnosis = window.document.querySelector('.cmp-diagnosis');
   assert.strictEqual(diagnosis.style.display, '');
   assert.match(diagnosis.textContent, /Không đọc được bàn cờ/);
-  assert.match(diagnosis.textContent, /quân cờ tìm thấy: 0/);
+  assert.match(diagnosis.textContent, /quân cờ: 0/);
   assert.match(diagnosis.textContent, /\/play\/online/);
   assert.ok(window.document.querySelector('.cmp-diag-copy'));
 });

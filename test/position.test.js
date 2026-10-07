@@ -148,3 +148,33 @@ test('diagnose reports what it can see', () => {
   assert.strictEqual(none.board, null);
   assert.strictEqual(none.pieces, 0);
 });
+
+test('diagnose describes the markup it does not understand', () => {
+  // A board whose pieces carry no square-XX class at all — the case reported
+  // from a real Chess.com page.
+  const window = makeWindow(`<!doctype html><html><body>
+    <div id="board-layout-chessboard"><div class="board" data-size="480">
+      <div class="piece-new" data-piece="wp" style="transform: translate(400%, 600%)"></div>
+      <div class="piece-new" data-piece="wk" style="transform: translate(0%, 0%)"></div>
+      <svg><use href="#wp"></use></svg>
+    </div></div>
+    <iframe src="https://example.com/game" class="game-frame"></iframe>
+  </body></html>`);
+  const info = window.CMPPosition.diagnose();
+
+  assert.strictEqual(info.board, null, 'cannot read it');
+  assert.strictEqual(info.squares, 0);
+  assert.strictEqual(info.counts['data-piece'], 2, 'but it counts the clues');
+  assert.strictEqual(info.counts.svg, 1);
+  assert.strictEqual(info.frames.length, 1, 'and reports iframes');
+  assert.strictEqual(info.frames[0].cls, 'game-frame');
+
+  // The structural sample is what makes a fix possible without a round trip.
+  assert.ok(info.boardTree, 'describes the container it found');
+  const shapes = info.boardTree.shapes.map((s) => s.shape);
+  assert.ok(shapes.includes('div.piece-new'), shapes.join(','));
+  const piece = info.boardTree.shapes.find((s) => s.shape === 'div.piece-new');
+  assert.strictEqual(piece.count, 2);
+  assert.match(piece.attrs.style, /translate/);
+  assert.strictEqual(piece.attrs['data-piece'], 'wp');
+});

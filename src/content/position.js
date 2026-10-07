@@ -19,6 +19,7 @@
 (function (root) {
   'use strict';
 
+  var VERSION = '1.4.0';
   var FILES = 'abcdefgh';
   var PIECE_RE = /(?:^|\s)(?:piece\s+)?([wb])([kqrbnp])(?:\s|$)/;
   var SQUARE_RE = /\bsquare-(\d)(\d)\b/;
@@ -139,10 +140,71 @@
     return ancestor && isVisible(ancestor) ? ancestor : null;
   }
 
+  function signature(el) {
+    var cls = classNameOf(el).trim().split(/\s+/).filter(Boolean).slice(0, 4).join('.');
+    return el.tagName.toLowerCase() + (cls ? '.' + cls : '');
+  }
+
+  /** The attributes that could carry a square: style, data-*, aria. */
+  function interestingAttrs(el) {
+    var out = {};
+    var attrs = el.attributes || [];
+    for (var i = 0; i < attrs.length && i < 12; i++) {
+      var name = attrs[i].name;
+      if (name === 'class') continue;
+      var value = String(attrs[i].value || '');
+      out[name] = value.length > 90 ? value.slice(0, 90) + '…' : value;
+    }
+    return out;
+  }
+
+  /**
+   * Groups an element's descendants by tag+class and counts them, with one
+   * example of each of the commonest shapes. Compact enough to paste into a
+   * bug report, detailed enough to write a reader from.
+   */
+  function describe(el, limit) {
+    if (!el) return null;
+    var nodes = el.querySelectorAll('*');
+    var counts = {};
+    var examples = {};
+    for (var i = 0; i < nodes.length; i++) {
+      var key = signature(nodes[i]);
+      counts[key] = (counts[key] || 0) + 1;
+      if (!examples[key]) examples[key] = nodes[i];
+    }
+    var ranked = Object.keys(counts).sort(function (a, b) { return counts[b] - counts[a]; });
+    var shapes = ranked.slice(0, limit || 12).map(function (key) {
+      return { shape: key, count: counts[key], attrs: interestingAttrs(examples[key]) };
+    });
+    return {
+      self: signature(el),
+      children: el.children.length,
+      descendants: nodes.length,
+      shapes: shapes
+    };
+  }
+
+  /** The element most likely to be the move list, by class name. */
+  function findMoveListCandidate() {
+    var best = null;
+    var bestCount = 0;
+    var candidates = queryAll('[class*="move"], [class*="moves"], [class*="notation"]');
+    for (var i = 0; i < candidates.length; i++) {
+      var count = candidates[i].children.length;
+      if (count > bestCount && count < 400) {
+        best = candidates[i];
+        bestCount = count;
+      }
+    }
+    return best;
+  }
+
   /**
    * What the extension can see on this page. Shown in the panel when no board
    * is found, so a user can report something specific instead of "it does not
-   * work".
+   * work" — and detailed enough to write a reader for markup we have never
+   * seen.
    */
   function diagnose() {
     var board = findBoard();
@@ -150,14 +212,47 @@
       return selector + ':' + queryAll(selector).length;
     });
     var moveList = readMoveList();
+
+    // Whatever element looks most like a board, even if we cannot read it.
+    var container = board;
+    if (!container) {
+      var guesses = queryAll('#board-layout-chessboard .board').concat(queryAll('.board'));
+      for (var i = 0; i < guesses.length && !container; i++) {
+        if (isVisible(guesses[i])) container = guesses[i];
+      }
+    }
+
     return {
       url: location.pathname,
-      board: board ? board.tagName.toLowerCase() + '.' + classNameOf(board).split(/\s+/).join('.') : null,
+      version: VERSION,
+      board: board ? signature(board) : null,
       pieces: allPieceElements().length,
       squares: queryAll('[class*="square-"]').length,
       moveNodes: moveList ? moveList.sans.length : 0,
       shadowRoots: roots().length - 1,
-      selectors: selectorHits
+      selectors: selectorHits,
+      counts: {
+        'class*=piece': queryAll('[class*="piece"]').length,
+        'data-piece': queryAll('[data-piece]').length,
+        img: container ? container.querySelectorAll('img').length : 0,
+        svg: container ? container.querySelectorAll('svg').length : 0,
+        use: container ? container.querySelectorAll('use').length : 0,
+        canvas: container ? container.querySelectorAll('canvas').length : 0
+      },
+      // A board rendered inside an iframe would explain finding a container but
+      // no pieces: this content script only runs in the top frame.
+      frames: Array.prototype.slice.call(document.querySelectorAll('iframe'))
+        .slice(0, 6)
+        .map(function (frame) {
+          var rect = frame.getBoundingClientRect();
+          return {
+            src: (frame.getAttribute('src') || '').slice(0, 80),
+            cls: classNameOf(frame).slice(0, 60),
+            size: Math.round(rect.width) + 'x' + Math.round(rect.height)
+          };
+        }),
+      boardTree: describe(container, 14),
+      moveTree: describe(findMoveListCandidate(), 6)
     };
   }
 
@@ -432,6 +527,7 @@
     readPosition: readPosition,
     findBoard: findBoard,
     diagnose: diagnose,
+    describe: describe,
     allPieceElements: allPieceElements,
     isFlipped: isFlipped,
     scanPieces: scanPieces,
