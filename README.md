@@ -124,7 +124,7 @@ nhập thành từ vị trí vua/xe, và ô bắt tốt qua đường chỉ khi 
 
 ```bash
 npm install          # chỉ cần cho test và script build
-npm test             # 102 test: đọc thế cờ, UCI, cổng fair play, API, giao diện, manifest
+npm test             # 109 test: đọc thế cờ, UCI, cổng fair play, API, giao diện, manifest
 npm i -D playwright  # chỉ cần cho test:e2e
 npm run test:e2e     # nạp tiện ích thật vào Chromium thật, chạy Stockfish thật
 npm run icons        # tạo lại icons/*.png
@@ -165,10 +165,26 @@ test/e2e/                         test nạp tiện ích thật vào Chromium th
 
 ### Khi Chess.com đổi giao diện
 
-Tiện ích tìm bàn cờ theo ba lớp: danh sách selector đã biết, rồi mọi shadow
-root, rồi — nếu vẫn không thấy — lấy phần tử cha chung của tất cả quân cờ
-`.piece.square-XX` trên trang. Lớp cuối sống sót qua phần lớn các lần Chess.com
-đổi tên lớp CSS.
+Tiện ích đọc thế cờ theo hai đường độc lập, và **không đường nào cần tên class
+của Chess.com giữ nguyên**:
+
+* **Quân cờ trên bàn** — tìm theo selector đã biết, rồi shadow root, rồi phần
+  tử cha chung của mọi `.piece.square-XX`, rồi cuối cùng là một phần tử lớn và
+  vuông (hình dạng của bàn cờ).
+* **Danh sách nước đi** — tìm theo selector, và nếu trượt thì **tìm theo nội
+  dung**: quét các phần tử có chữ đọc được như một nước cờ, rồi chọn phần tử
+  cha chứa cụm dày đặc nhất (tính điểm theo `số nước² / số phần tử con`, để một
+  nước lọt vào khung chat không kéo cả `<body>` thành danh sách nước đi).
+
+Trên các trang bot mới của Chess.com, quân cờ hoàn toàn không đọc được — bàn cờ
+chỉ còn nhãn toạ độ. Khi đó tiện ích dựng lại thế cờ **chỉ từ danh sách nước
+đi** (phát lại bằng chess.js) và ghi "đọc từ danh sách nước đi" trong bảng.
+Hướng bàn cờ khi đó lấy từ nhãn số hàng trong SVG toạ độ, không cần class
+`flipped`.
+
+Việc quét toàn trang chỉ chạy **một lần**; sau đó phần tử bàn cờ và khung danh
+sách nước đi được nhớ lại, nên mỗi lần đọc tiếp theo chỉ tốn ~1ms thay vì
+~200ms.
 
 Nếu vẫn hỏng, bảng sẽ hiện khung chẩn đoán (số quân cờ, số ô, selector nào khớp)
 thay vì biến mất. Thường chỉ cần thêm selector mới vào `BOARD_SELECTORS` hoặc

@@ -669,6 +669,9 @@
     if (moves.length) {
       metaParts.push('độ sâu ' + engine.depth);
       if (engine.context === 'computer') metaParts.push('ván với máy');
+      if (this.state.position && this.state.position.source === 'move-list-only') {
+        metaParts.push('đọc từ danh sách nước đi');
+      }
       metaParts.push('điểm theo bên đang đi');
     }
     els.meta.textContent = metaParts.join(' · ');
@@ -745,6 +748,9 @@
       metaParts.push((data.opening.eco ? data.opening.eco + ' ' : '') + data.opening.name);
     }
     if (position) metaParts.push(position.turn === 'w' ? 'Trắng đi' : 'Đen đi');
+    if (position && position.source === 'move-list-only') {
+      metaParts.push('đọc từ danh sách nước đi');
+    }
     els.meta.textContent = metaParts.join(' · ');
     els.meta.style.display = metaParts.length ? '' : 'none';
 

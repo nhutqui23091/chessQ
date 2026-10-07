@@ -162,7 +162,10 @@ test('diagnose describes the markup it does not understand', () => {
   </body></html>`);
   const info = window.CMPPosition.diagnose();
 
-  assert.strictEqual(info.board, null, 'cannot read it');
+  // The square-shaped container is found (the badges need somewhere to sit)
+  // even though none of its pieces can be read.
+  assert.strictEqual(info.board, 'div.board');
+  assert.strictEqual(info.pieces, 0);
   assert.strictEqual(info.squares, 0);
   assert.strictEqual(info.counts['data-piece'], 2, 'but it counts the clues');
   assert.strictEqual(info.counts.svg, 1);
@@ -177,4 +180,93 @@ test('diagnose describes the markup it does not understand', () => {
   assert.strictEqual(piece.count, 2);
   assert.match(piece.attrs.style, /translate/);
   assert.strictEqual(piece.attrs['data-piece'], 'wp');
+});
+
+// --- when the pieces cannot be read at all -----------------------------------
+// The case reported from Chess.com's bot pages: a board element with nothing in
+// it but coordinate labels, and a move list whose classes mean nothing to us.
+
+const OPAQUE_BOARD =
+  '<div id="board-layout-chessboard"><div class="board" data-size="480">' +
+  '<svg class="coordinates" viewBox="0 0 100 100">' +
+  '<text class="coordinate-light" x="0.75" y="3.5">8</text>' +
+  '<text class="coordinate-dark" x="0.75" y="91">1</text></svg>' +
+  '<div style="width:100%;height:100%;position:absolute"></div></div></div>';
+
+// Hashed class names, as a CSS-modules build produces.
+function hashedMoveList(sans, selectedIndex) {
+  const rows = sans.map((san, index) => {
+    const selected = index + 1 === selectedIndex ? ' selected' : '';
+    return `<span class="a7Bq${selected}">${san}</span>`;
+  }).join('');
+  return `<div class="gjQxHO"><div class="pLmNo">${rows}</div></div>`;
+}
+
+test('reads the game from the move list when no piece can be read', () => {
+  const { position } = read(OPAQUE_BOARD + hashedMoveList(['e4', 'c5', 'Nf3'], 3));
+  assert.ok(position, 'should still produce a position');
+  assert.strictEqual(position.source, 'move-list-only');
+  assert.strictEqual(position.fen,
+    'rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2');
+  assert.ok(position.board, 'and still finds the board for the overlay');
+});
+
+test('honours the selected move in a move list with meaningless classes', () => {
+  const { position } = read(OPAQUE_BOARD + hashedMoveList(['e4', 'c5', 'Nf3'], 1));
+  assert.strictEqual(position.ply, 1);
+  assert.strictEqual(position.turn, 'b');
+});
+
+test('ignores stray move-looking text outside the move list', () => {
+  const { position } = read(OPAQUE_BOARD + hashedMoveList(['e4', 'e5'], 2) +
+    '<div class="chat"><span>Nf3</span></div><footer><span>e4</span></footer>');
+  // The densest container wins, so the chat line does not join the game.
+  assert.strictEqual(position.fen.split(' ')[0],
+    'rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR');
+});
+
+test('reads board orientation from the coordinate labels', () => {
+  const { window } = read(OPAQUE_BOARD);
+  const board = window.document.querySelector('.board');
+  assert.strictEqual(window.CMPPosition.flippedFromCoordinates(board), false);
+
+  // Rank 1 at the top means black is at the bottom.
+  const flipped = read(OPAQUE_BOARD
+    .replace('y="3.5">8<', 'y="3.5">1<')
+    .replace('y="91">1<', 'y="91">8<'));
+  const flippedBoard = flipped.window.document.querySelector('.board');
+  assert.strictEqual(flipped.window.CMPPosition.flippedFromCoordinates(flippedBoard), true);
+});
+
+test('still prefers the pieces when they can be read', () => {
+  // Both sources present and disagreeing: the board wins, as before.
+  const puzzle = '8/8/4k3/8/8/4K3/4P3/8 w - - 0 1';
+  const { position } = read(boardHtml(puzzle) + hashedMoveList(['e4', 'e5'], 2));
+  assert.strictEqual(position.source, 'board-scan');
+  assert.strictEqual(position.fen, puzzle);
+});
+
+test('scanning a big page for moves stays cheap', () => {
+  // The content-based scan walks every element, so it has to stay fast enough
+  // to run on a poll. jsdom is slower than a browser, so this is conservative.
+  const noise = Array.from({ length: 2500 },
+    (_, i) => `<div class="c${i}"><span>x${i}</span></div>`).join('');
+  const window = makeWindow(`<!doctype html><html><body>${noise}${OPAQUE_BOARD}
+    ${hashedMoveList(['e4', 'c5', 'Nf3', 'd6', 'd4', 'cxd4'], 6)}</body></html>`);
+
+  // First read pays for the full-page scan; later reads must not, because they
+  // run on a timer for as long as the tab is open.
+  const firstStart = Date.now();
+  const first = window.CMPPosition.readPosition();
+  const firstCall = Date.now() - firstStart;
+
+  const start = Date.now();
+  let position = null;
+  for (let i = 0; i < 10; i++) position = window.CMPPosition.readPosition();
+  const perCall = (Date.now() - start) / 10;
+
+  assert.ok(first && position, 'still reads the game');
+  assert.strictEqual(position.source, 'move-list-only');
+  assert.ok(firstCall < 600, `${firstCall} ms for the first read is too slow`);
+  assert.ok(perCall < 10, `${perCall.toFixed(1)} ms per repeat read is too slow`);
 });

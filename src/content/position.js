@@ -19,7 +19,7 @@
 (function (root) {
   'use strict';
 
-  var VERSION = '1.4.0';
+  var VERSION = '1.5.0';
   var FILES = 'abcdefgh';
   var PIECE_RE = /(?:^|\s)(?:piece\s+)?([wb])([kqrbnp])(?:\s|$)/;
   var SQUARE_RE = /\bsquare-(\d)(\d)\b/;
@@ -60,24 +60,42 @@
     return rect.width > 40 && rect.height > 40;
   }
 
+  var shadowCache = { at: 0, roots: [] };
+  var SHADOW_TTL_MS = 2000;
+
   /**
-   * Every root to search: the document plus any open shadow roots. Chess.com
-   * renders the board as a custom element, and a future version of it could
-   * put the pieces inside a shadow root where a plain querySelector cannot
-   * reach them.
+   * Open shadow roots on the page. Finding them means walking every element,
+   * so the list is cached: this runs behind a poll and the page is large.
    */
-  function roots() {
-    var all = [document];
-    var hosts = document.querySelectorAll('*');
-    for (var i = 0; i < hosts.length; i++) {
-      if (hosts[i].shadowRoot) all.push(hosts[i].shadowRoot);
+  function shadowRoots() {
+    var now = Date.now();
+    if (now - shadowCache.at < SHADOW_TTL_MS) return shadowCache.roots;
+    var found = [];
+    var all = document.querySelectorAll('*');
+    for (var i = 0; i < all.length; i++) {
+      if (all[i].shadowRoot) found.push(all[i].shadowRoot);
     }
-    return all;
+    shadowCache = { at: now, roots: found };
+    return found;
   }
 
+  /** Every root to search: the document plus any open shadow roots. */
+  function roots() {
+    return [document].concat(shadowRoots());
+  }
+
+  /**
+   * Elements matching a selector. The light DOM is searched first and the
+   * shadow roots only when it comes up empty — walking the page for shadow
+   * hosts costs far more than the query itself, and Chess.com's board has
+   * never been inside one.
+   */
   function queryAll(selector) {
+    var direct = document.querySelectorAll(selector);
+    if (direct.length) return Array.prototype.slice.call(direct);
+
     var out = [];
-    var scopes = roots();
+    var scopes = shadowRoots();
     for (var i = 0; i < scopes.length; i++) {
       var found = scopes[i].querySelectorAll(selector);
       for (var j = 0; j < found.length; j++) out.push(found[j]);
@@ -110,8 +128,27 @@
     return null;
   }
 
-  /** The biggest visible board on the page (there is normally exactly one). */
+  var boardCache = { at: 0, el: null };
+  var BOARD_TTL_MS = 2000;
+
+  /**
+   * The biggest visible board on the page (there is normally exactly one).
+   * Cached: the selectors are attribute-substring matches, which are the most
+   * expensive thing this file does, and this runs behind a poll. The cache is
+   * dropped as soon as the element leaves the page, and expires anyway so a
+   * board swapped in by the single-page app is picked up.
+   */
   function findBoard() {
+    if (boardCache.el && boardCache.el.isConnected && isVisible(boardCache.el) &&
+        Date.now() - boardCache.at < BOARD_TTL_MS) {
+      return boardCache.el;
+    }
+    var found = searchForBoard();
+    boardCache = { at: Date.now(), el: found };
+    return found;
+  }
+
+  function searchForBoard() {
     var best = null;
     var bestArea = 0;
     for (var i = 0; i < BOARD_SELECTORS.length; i++) {
@@ -135,9 +172,34 @@
     // pieces themselves are the one thing that cannot change without breaking
     // the site, so fall back to whatever element contains them all.
     var pieces = allPieceElements();
-    if (pieces.length < 2) return null;
-    var ancestor = closestCommonAncestor(pieces);
-    return ancestor && isVisible(ancestor) ? ancestor : null;
+    if (pieces.length >= 2) {
+      var ancestor = closestCommonAncestor(pieces);
+      if (ancestor && isVisible(ancestor)) return ancestor;
+    }
+
+    // Still nothing: the board may render its pieces in a way we cannot read
+    // at all (a canvas, a closed shadow root). A big square element is still
+    // worth having — the badges need somewhere to sit, and the position can
+    // come from the move list instead.
+    return findSquareElement();
+  }
+
+  /** A large, roughly square element: the shape of a chessboard. */
+  function findSquareElement() {
+    var best = null;
+    var bestArea = 0;
+    var candidates = queryAll(BOARD_SELECTORS.join(','));
+    for (var i = 0; i < candidates.length; i++) {
+      var rect = candidates[i].getBoundingClientRect();
+      if (rect.width < 200 || rect.height < 200) continue;
+      if (Math.abs(rect.width - rect.height) > rect.width * 0.06) continue;
+      var area = rect.width * rect.height;
+      if (area > bestArea) {
+        best = candidates[i];
+        bestArea = area;
+      }
+    }
+    return best;
   }
 
   function signature(el) {
@@ -256,8 +318,33 @@
     };
   }
 
+  /**
+   * Board orientation. The `flipped` class is the usual signal, but Chess.com
+   * also draws rank numbers into the board: whichever rank label sits highest
+   * tells us which way round the board is, whatever the classes are called.
+   */
   function isFlipped(boardEl) {
-    return /\bflipped\b/.test(classNameOf(boardEl));
+    if (/\bflipped\b/.test(classNameOf(boardEl))) return true;
+    var fromLabels = flippedFromCoordinates(boardEl);
+    return fromLabels === null ? false : fromLabels;
+  }
+
+  function flippedFromCoordinates(boardEl) {
+    if (!boardEl) return null;
+    var labels = boardEl.querySelectorAll('text');
+    var topRank = null;
+    var topY = Infinity;
+    for (var i = 0; i < labels.length; i++) {
+      var text = (labels[i].textContent || '').trim();
+      if (!/^[1-8]$/.test(text)) continue;
+      var y = parseFloat(labels[i].getAttribute('y'));
+      if (isNaN(y) || y >= topY) continue;
+      topY = y;
+      topRank = Number(text);
+    }
+    if (topRank === null) return null;
+    // Rank 8 at the top means white is at the bottom: not flipped.
+    return topRank < 5;
   }
 
   function squareName(file, rank) {
@@ -424,7 +511,7 @@
   }
 
   /** The SAN moves shown in the move list, cut off at the selected move. */
-  function readMoveList() {
+  function readMoveListBySelector() {
     var container = null;
     for (var i = 0; i < MOVE_LIST_SELECTORS.length && !container; i++) {
       var candidates = document.querySelectorAll(MOVE_LIST_SELECTORS[i]);
@@ -436,7 +523,11 @@
       }
     }
     if (!container) return null;
+    return extractFromContainer(container);
+  }
 
+  /** Pulls the moves out of a classic Chess.com move-list container. */
+  function extractFromContainer(container) {
     var raw = container.querySelectorAll(NODE_SELECTOR);
     var nodes = innermost(Array.prototype.slice.call(raw));
     var sans = [];
@@ -449,15 +540,157 @@
     }
     if (!sans.length) return null;
 
-    var selected = sans.length;
-    for (var n = 0; n < elements.length; n++) {
-      var el = elements[n];
-      var marked = /\bselected\b/.test(classNameOf(el)) ||
-        !!el.querySelector('[class*="selected"]') ||
-        (el.parentElement && /\bselected\b/.test(classNameOf(el.parentElement)));
-      if (marked) selected = n + 1;
+    return {
+      container: container,
+      sans: sans,
+      selected: selectedIndexOf(elements, container),
+      source: 'selector'
+    };
+  }
+
+  // Finding the move list means querying the whole page — by selector, or by
+  // reading every element's text. Affordable once, not on every poll, so the
+  // container is remembered and later reads only look inside it. The full
+  // search runs again the moment it leaves the page or stops holding moves.
+  var moveCache = { container: null, kind: null };
+
+  /** The move list, by selector if possible and by content otherwise. */
+  function readMoveList() {
+    if (moveCache.container && moveCache.container.isConnected) {
+      var again = moveCache.kind === 'selector'
+        ? extractFromContainer(moveCache.container)
+        : readTextMoves(moveCache.container);
+      if (again && again.sans.length) return again;
+      moveCache = { container: null, kind: null };
     }
-    return { sans: sans, selected: selected };
+
+    var bySelector = readMoveListBySelector();
+    if (bySelector && bySelector.sans.length) {
+      moveCache = { container: bySelector.container, kind: 'selector' };
+      return bySelector;
+    }
+
+    var found = findMoveNodesByText();
+    if (!found || !found.sans.length) return null;
+    moveCache = { container: found.container, kind: 'text' };
+    return readTextMoves(found.container, found);
+  }
+
+  function readTextMoves(container, known) {
+    var found = known || collectMovesFrom(container);
+    if (!found || !found.sans.length) return null;
+    return {
+      container: container,
+      sans: found.sans,
+      selected: selectedIndexOf(found.nodes, container),
+      source: 'text'
+    };
+  }
+
+  /**
+   * Finds the move list by what it says rather than what it is called.
+   *
+   * Chess.com renames its CSS classes; it cannot rename the moves themselves.
+   * This collects every leaf element whose text reads as a move, then picks
+   * the ancestor holding the most of them — that container is the move list,
+   * whatever its markup.
+   */
+  /** Reads the moves out of a container already known to hold them. */
+  function collectMovesFrom(container) {
+    var nodes = [];
+    var sans = [];
+    var all = container.querySelectorAll('*');
+    for (var i = 0; i < all.length; i++) {
+      var el = all[i];
+      if (el.childElementCount > 1) continue;
+      var raw = el.textContent;
+      if (!raw || raw.length > 12) continue;
+      var text = cleanSan(raw);
+      if (!text || text.length > 7) continue;
+      var san = el.childElementCount === 0 ? text : sanFromNode(el);
+      if (!looksLikeSan(san)) continue;
+      nodes.push(el);
+      sans.push(san);
+    }
+    return sans.length ? { container: container, nodes: nodes, sans: sans } : null;
+  }
+
+  function findMoveNodesByText() {
+    var hits = [];
+    var sans = [];
+    var all = document.querySelectorAll('body *');
+    for (var i = 0; i < all.length; i++) {
+      var el = all[i];
+      // A move is a leaf, or a leaf plus a figurine glyph.
+      if (el.childElementCount > 1) continue;
+      var raw = el.textContent;
+      if (!raw || raw.length > 12) continue;
+      var text = cleanSan(raw);
+      if (!text || text.length > 7) continue;
+      // Only elements holding a glyph need the figurine lookup, which costs a
+      // DOM query — the rest are read straight from their text.
+      var san = el.childElementCount === 0 ? text : sanFromNode(el);
+      if (!looksLikeSan(san)) continue;
+      hits.push(el);
+      sans.push(san);
+    }
+    if (hits.length < 2) return null;
+
+    // Which ancestor is the move list? Not simply the one holding the most
+    // moves — <body> holds every one of them, including a move quoted in the
+    // chat. Score by count AND density (count² / descendants) so a tight
+    // cluster of moves beats a large container that merely encloses it, while
+    // the real list still beats one of its own rows.
+    var counts = new Map();
+    for (var h = 0; h < hits.length; h++) {
+      var node = hits[h].parentElement;
+      for (var up = 0; up < 5 && node; up++) {
+        counts.set(node, (counts.get(node) || 0) + 1);
+        node = node.parentElement;
+      }
+    }
+
+    var container = null;
+    var bestScore = 0;
+    counts.forEach(function (count, node) {
+      if (count < 2) return;
+      if (node === document.body || node === document.documentElement) return;
+      var size = node.querySelectorAll('*').length || 1;
+      var score = (count * count) / size;
+      if (score > bestScore) {
+        container = node;
+        bestScore = score;
+      }
+    });
+    if (!container) return null;
+
+    var nodes = [];
+    var moves = [];
+    for (var k = 0; k < hits.length; k++) {
+      if (!container.contains(hits[k])) continue;
+      nodes.push(hits[k]);
+      moves.push(sans[k]);
+    }
+    return { container: container, nodes: nodes, sans: moves };
+  }
+
+  function selectedIndexOf(nodes, container) {
+    var selected = nodes.length;
+    for (var i = 0; i < nodes.length; i++) {
+      var el = nodes[i];
+      var marked = false;
+      // The marker can sit on the move or on a wrapper up to the container.
+      for (var node = el; node && node !== container; node = node.parentElement) {
+        var cls = classNameOf(node);
+        if (/\b(selected|active|current)\b/.test(cls) ||
+            node.getAttribute('aria-current') === 'true') {
+          marked = true;
+          break;
+        }
+      }
+      if (marked) selected = i + 1;
+    }
+    return selected;
   }
 
   function replay(sans, count) {
@@ -479,26 +712,42 @@
    */
   function readPosition() {
     var boardEl = findBoard();
-    if (!boardEl) return null;
-    var pieces = scanPieces(boardEl);
-    if (!pieces) return null;
-
-    var placement = placementOf(pieces);
+    var pieces = boardEl ? scanPieces(boardEl) : null;
     var moveList = readMoveList();
+    var placement = pieces ? placementOf(pieces) : null;
 
     if (moveList) {
       var game = replay(moveList.sans, moveList.selected);
-      if (game && game.fen().split(' ')[0] === placement) {
-        return {
-          fen: game.fen(),
-          board: boardEl,
-          flipped: isFlipped(boardEl),
-          turn: game.turn(),
-          source: 'move-list',
-          ply: moveList.selected
-        };
+      if (game) {
+        // With readable pieces the replay is only trusted when it matches what
+        // is on the board, which is what keeps variations and puzzles correct.
+        if (placement && game.fen().split(' ')[0] === placement) {
+          return {
+            fen: game.fen(),
+            board: boardEl,
+            flipped: isFlipped(boardEl),
+            turn: game.turn(),
+            source: 'move-list',
+            ply: moveList.selected
+          };
+        }
+        // Without readable pieces there is nothing to check it against, but a
+        // move list that replays cleanly from the opening position is still a
+        // real game — and it is all we have.
+        if (!placement) {
+          return {
+            fen: game.fen(),
+            board: boardEl,
+            flipped: boardEl ? isFlipped(boardEl) : false,
+            turn: game.turn(),
+            source: 'move-list-only',
+            ply: moveList.selected
+          };
+        }
       }
     }
+
+    if (!pieces) return null;
 
     var turn = turnFromHighlights(boardEl, pieces);
     if (!turn && moveList) turn = moveList.selected % 2 === 0 ? 'w' : 'b';
@@ -530,6 +779,8 @@
     describe: describe,
     allPieceElements: allPieceElements,
     isFlipped: isFlipped,
+    flippedFromCoordinates: flippedFromCoordinates,
+    findSquareElement: findSquareElement,
     scanPieces: scanPieces,
     placementOf: placementOf,
     cleanSan: cleanSan,

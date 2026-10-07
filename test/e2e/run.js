@@ -49,12 +49,19 @@ function stageExtension() {
 }
 
 function serveFixture() {
-  const page = fs.readFileSync(path.join(__dirname, 'fixture.html'));
+  const classic = fs.readFileSync(path.join(__dirname, 'fixture.html'));
+  // The newer markup, where only the move text is readable.
+  const opaque = fs.readFileSync(path.join(__dirname, 'fixture-opaque.html'));
   const server = http.createServer((req, res) => {
     const url = req.url.split('?')[0];
     if (['/play/computer', '/analysis', '/play/online', '/'].includes(url)) {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-      res.end(page);
+      res.end(classic);
+      return;
+    }
+    if (url === '/play/computer/opaque') {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(opaque);
       return;
     }
     res.writeHead(404);
@@ -138,6 +145,23 @@ async function main() {
       engine
         ? `${engine.rows} nước ở độ sâu ${engine.depth}, tốt nhất ${engine.first} ${engine.score}, ${engine.badges} huy hiệu`
         : 'did not reach 4 lines at the configured depth');
+
+    // The newer Chess.com markup: no readable pieces, hashed move-list classes.
+    const opaque = await context.newPage();
+    const started = Date.now();
+    await opaque.goto(`http://127.0.0.1:${PORT}/play/computer/opaque`);
+    const fromMoves = await waitFor(opaque, () => {
+      const rows = document.querySelectorAll('.cmp-row-eng:not(.cmp-row-head)');
+      const meta = document.querySelector('.cmp-meta');
+      const depth = /độ sâu (\d+)/.exec(meta ? meta.textContent : '');
+      if (rows.length < 4 || !depth || Number(depth[1]) < 14) return null;
+      return { rows: rows.length, first: rows[0].querySelector('.cmp-c-san').textContent };
+    }, 30000);
+    check('it still reads the game where only the move text is readable',
+      !!fromMoves,
+      fromMoves ? `${fromMoves.rows} nước, tốt nhất ${fromMoves.first}` : 'no position');
+    await opaque.close();
+    void started;
 
     // And must refuse where the opponent could be a person.
     const human = await context.newPage();

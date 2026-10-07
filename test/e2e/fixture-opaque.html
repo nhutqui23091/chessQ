@@ -1,0 +1,53 @@
+<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>Chơi với Bot</title>
+<!--
+  A stand-in for Chess.com's newer bot pages, built from a real diagnostic
+  report: div.board holds nothing but coordinate labels and one empty layer,
+  there is no square-XX class anywhere, and the move list's class names are
+  hashed. The only readable thing on the page is the text of the moves.
+-->
+<style>
+ body{margin:0;background:#312e2b;font-family:system-ui;color:#eee}
+ .layout{display:flex;gap:20px;padding:20px}
+ #board-layout-chessboard{position:relative}
+ .board{position:relative;width:480px;height:480px;background:#769656}
+ .coordinates{position:absolute;inset:0;width:100%;height:100%}
+ .gjQxHO{width:280px;font-size:14px;line-height:2}
+ .pLmNo{display:flex;flex-wrap:wrap;gap:6px}
+ .a7Bq{padding:2px 6px;background:#3d3a35;border-radius:4px}
+ .a7Bq.selected{background:#7fa650;color:#16200c}
+</style></head><body>
+<div class="layout">
+  <div id="board-layout-chessboard">
+    <div class="board">
+      <style>.x{}</style>
+      <svg class="coordinates" viewBox="0 0 100 100">
+        <text class="coordinate-light" x="0.75" y="3.5" font-size="2.8">8</text>
+        <text class="coordinate-dark" x="0.75" y="15.75" font-size="2.8">7</text>
+        <text class="coordinate-light" x="0.75" y="91" font-size="2.8">1</text>
+        <text class="coordinate-dark" x="10" y="99" font-size="2.8">a</text>
+      </svg>
+      <div style="width:100%;height:100%;position:absolute"></div>
+    </div>
+  </div>
+  <div class="side">
+    <div class="gjQxHO"><div class="pLmNo" id="moves"></div></div>
+    <div class="live-game-buttons-component">
+      <button data-cy="resign-button">Đầu hàng</button>
+    </div>
+    <div class="chat-area">Đối thủ nói: nước Nf3 hay đấy</div>
+  </div>
+</div>
+<script>
+window.setMoves = function (sans) {
+  var list = document.getElementById('moves');
+  list.textContent = '';
+  sans.forEach(function (san, i) {
+    var el = document.createElement('span');
+    el.className = 'a7Bq' + (i === sans.length - 1 ? ' selected' : '');
+    el.textContent = san;
+    list.appendChild(el);
+  });
+};
+// 1.e4 e5 2.Nf3 Nc6 3.Bc4 — black to move, an Italian.
+setMoves(['e4', 'e5', 'Nf3', 'Nc6', 'Bc4']);
+</script></body></html>
