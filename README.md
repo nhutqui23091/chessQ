@@ -128,7 +128,7 @@ nhập thành từ vị trí vua/xe, và ô bắt tốt qua đường chỉ khi 
 
 ```bash
 npm install          # chỉ cần cho test và script build
-npm test             # 120 test: đọc thế cờ, UCI, cổng fair play, API, giao diện, manifest
+npm test             # 124 test: đọc thế cờ, UCI, cổng fair play, API, giao diện, manifest
 npm i -D playwright  # chỉ cần cho test:e2e
 npm run test:e2e     # nạp tiện ích thật vào Chromium thật, chạy Stockfish thật
 npm run icons        # tạo lại icons/*.png
@@ -173,8 +173,11 @@ Tiện ích đọc thế cờ theo hai đường độc lập, và **không đư
 của Chess.com giữ nguyên**:
 
 * **Quân cờ trên bàn** — tìm theo selector đã biết, rồi shadow root, rồi phần
-  tử cha chung của mọi `.piece.square-XX`, rồi cuối cùng là một phần tử lớn và
-  vuông (hình dạng của bàn cờ).
+  tử cha chung của mọi `.piece.square-XX`.
+* **Lớp nhãn toạ độ** — khi không đọc được quân, phần tử chứa các nhãn
+  `a`–`h` / `1`–`8` chính là vùng 8×8, dùng để đặt nhãn % cho khớp ô. Không có
+  nó thì lấy phần tử vuông **nhỏ nhất** đủ lớn: bàn cờ nằm trong các khung
+  layout cũng vuông nhưng to hơn nhiều, chọn cái to nhất là lệch hết.
 * **Danh sách nước đi** — tìm theo selector, và nếu trượt thì **tìm theo nội
   dung**: quét các phần tử có chữ đọc được như một nước cờ, rồi chọn phần tử
   cha chứa cụm dày đặc nhất (tính điểm theo `số nước² / số phần tử con`, để một

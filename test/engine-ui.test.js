@@ -106,7 +106,7 @@ test('spreads badges out when two moves share a destination', (t) => {
   assert.strictEqual(badges.length, 2);
   // Same square, so both move off the centre line, in opposite directions...
   assert.match(badges[0].style.transform, /translateY\(0%\)/);
-  assert.match(badges[1].style.transform, /translateY\(26%\)/);
+  assert.match(badges[1].style.transform, /translateY\(34%\)/);
   // Each keeps its styled chip rather than being replaced by bare text.
   assert.ok(badges[0].querySelector('.cmp-badge-text'));
   assert.ok(badges[1].querySelector('.cmp-badge-text'));
@@ -166,9 +166,46 @@ test('shows partial results while the engine is still searching', (t) => {
   assert.strictEqual(window.document.querySelectorAll('.cmp-badge').length, 4);
 });
 
-test('says when the live numbers come from a bot game', (t) => {
+test('the summary line stays short, with the detail on hover', (t) => {
   const { window } = setup(t, Object.assign({}, ENGINE, { context: 'computer' }));
-  assert.match(window.document.querySelector('.cmp-meta').textContent, /ván với máy/);
+  const meta = window.document.querySelector('.cmp-meta');
+  // Short enough not to wrap in a 352px panel.
+  assert.ok(meta.textContent.length < 32, meta.textContent);
+  assert.match(meta.textContent, /Trắng đi/);
+  assert.match(meta.textContent, /độ sâu 14/);
+  // The rest is still available, just not shouted.
+  assert.match(meta.title, /bên đang đi/);
+  assert.match(meta.title, /luyện với máy/);
+});
+
+test('a position read from the move list is labelled', (t) => {
+  const window = makeUiWindow(`<!doctype html><html><body>${boardHtml(FEN)}</body></html>`);
+  const ui = new window.CMPUI({ onSettingsChange: () => {} });
+  ui.setSettings(window.CMPSettings.normalize({ mode: 'engine' }));
+  ui.setState({
+    status: 'idle',
+    data: null,
+    position: {
+      board: window.document.querySelector('wc-chess-board'),
+      flipped: false, turn: 'w', source: 'move-list-only'
+    },
+    engine: ENGINE
+  });
+  t.after(() => { ui.destroy(); window.close(); });
+
+  const meta = window.document.querySelector('.cmp-meta');
+  assert.match(meta.textContent, /từ danh sách nước/);
+  assert.match(meta.title, /canvas/);
+});
+
+test('at most three chips share one square', (t) => {
+  const crowded = Object.assign({}, ENGINE, {
+    moves: ['b1d2', 'f3d2', 'd1d2', 'e1d2'].map((uci, i) => ({
+      uci: uci, san: 'X' + i, cp: 30 - i, mate: null, loss: i, best: i === 0, pvSan: ['X' + i]
+    }))
+  });
+  const { window } = setup(t, crowded);
+  assert.strictEqual(window.document.querySelectorAll('.cmp-badge').length, 3);
 });
 
 test('the mode switch reports the chosen mode', (t) => {

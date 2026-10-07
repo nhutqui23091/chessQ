@@ -409,3 +409,38 @@ test('two readings that both survive are refused, not guessed', () => {
 
   assert.strictEqual(read(html).position, null);
 });
+
+test('the badge grid lands on the board, not on the layout around it', () => {
+  // The reported page: a big square layout column wrapping a smaller board.
+  // Picking the wrapper is what put every badge on the wrong square.
+  const window = makeWindow(`<!doctype html><html><body>
+    <div class="board-layout-main" data-size="900">
+      <div id="board-layout-chessboard"><div class="board" data-size="480">
+        <svg class="coordinates" viewBox="0 0 100 100" data-size="480">
+          <text class="coordinate-light" x="0.75" y="3.5">8</text>
+          <text class="coordinate-dark" x="0.75" y="15.75">7</text>
+          <text class="coordinate-light" x="0.75" y="28">6</text>
+          <text class="coordinate-dark" x="0.75" y="91">1</text>
+          <text class="coordinate-dark" x="10" y="99">a</text>
+          <text class="coordinate-light" x="22" y="99">b</text>
+          <text class="coordinate-dark" x="35" y="99">c</text>
+          <text class="coordinate-light" x="97" y="99">h</text>
+        </svg>
+        <div style="width:100%;height:100%;position:absolute"></div>
+      </div></div>
+    </div></body></html>`);
+
+  const board = window.CMPPosition.findBoard();
+  assert.ok(board, 'a board should be found');
+  assert.strictEqual(board.getBoundingClientRect().width, 480,
+    'must be the 480px board, not the 900px layout column');
+});
+
+test('a square layout wrapper alone never beats the inner board', () => {
+  const window = makeWindow(`<!doctype html><html><body>
+    <div class="board-layout-main board" data-size="900">
+      <div id="board-layout-chessboard"><div class="board" data-size="420"></div></div>
+    </div></body></html>`);
+  assert.strictEqual(
+    window.CMPPosition.findSquareElement().getBoundingClientRect().width, 420);
+});

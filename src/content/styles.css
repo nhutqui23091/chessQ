@@ -23,15 +23,15 @@
   right: 16px;
   bottom: 16px;
   z-index: 2147483000;
-  width: 352px;
+  width: 340px;
   max-width: calc(100vw - 24px);
   box-sizing: border-box;
   border: 1px solid var(--cmp-line);
-  border-radius: 10px;
+  border-radius: 12px;
   background: var(--cmp-bg);
   color: var(--cmp-text);
   font: 13px/1.35 "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.5);
   overflow: hidden;
 }
 
@@ -44,7 +44,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 7px 8px;
+  padding: 8px 10px;
   background: var(--cmp-bg-soft);
   border-bottom: 1px solid var(--cmp-line);
   cursor: grab;
@@ -130,13 +130,29 @@
   color: var(--cmp-text);
 }
 
-.cmp-body { padding: 8px; }
+.cmp-body { padding: 10px; }
 .cmp-panel.cmp-collapsed .cmp-body { display: none; }
 
 .cmp-meta {
-  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 8px;
+  margin-bottom: 8px;
   color: var(--cmp-muted);
   font-size: 11.5px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.cmp-meta-turn { color: var(--cmp-text); font-weight: 600; }
+.cmp-meta-depth { font-variant-numeric: tabular-nums; }
+.cmp-meta-tag {
+  padding: 1px 6px;
+  border: 1px solid var(--cmp-line);
+  border-radius: 999px;
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .cmp-totals {
@@ -221,17 +237,23 @@
   border-radius: 5px;
 }
 /* --- engine rows --- */
-.cmp-row-eng { grid-template-columns: 54px 56px 1fr; }
+.cmp-row-eng {
+  grid-template-columns: 52px 50px 1fr;
+  gap: 9px;
+  padding: 5px 6px;
+}
+.cmp-row-eng.cmp-row-head { padding-bottom: 5px; }
 .cmp-san-best { color: var(--cmp-best); }
+.cmp-row-eng:not(.cmp-row-head):first-of-type { background: rgba(127, 166, 80, 0.08); }
 .cmp-c-eval { display: flex; }
 .cmp-eval {
   display: inline-block;
-  min-width: 46px;
-  padding: 1px 5px;
-  border-radius: 4px;
+  min-width: 44px;
+  padding: 2px 5px;
+  border-radius: 5px;
   text-align: center;
   font-size: 11.5px;
-  font-weight: 600;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: #16200c;
 }
@@ -374,13 +396,13 @@
 }
 .cmp-arrow-line {
   stroke: #f0c541;
-  stroke-width: 1.6;
-  stroke-opacity: 0.85;
+  stroke-width: 1.1;
+  stroke-opacity: 0.7;
   stroke-linecap: round;
 }
 .cmp-arrow-head {
   fill: #f0c541;
-  fill-opacity: 0.9;
+  fill-opacity: 0.75;
 }
 
 /*
@@ -403,14 +425,18 @@
   /* Never shrink: a chip wider than its square should spill over the edge
      rather than wrap its label onto two lines. */
   flex: 0 0 auto;
-  padding: 1px 4px;
-  border-radius: 5px;
-  background: rgba(23, 22, 20, 0.82);
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  font: 700 calc(var(--cmp-font, 13px) * 0.82)/1.25 "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: rgba(23, 22, 20, 0.86);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  font: 700 calc(var(--cmp-font, 13px) * 0.8)/1.3 "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
   color: #fff;
   white-space: nowrap;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  /* A ring plus a drop shadow: the chips sit over photographic board themes
+     where a flat colour alone disappears. */
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(0, 0, 0, 0.25);
 }
 .cmp-badge-mid .cmp-badge-text { background: rgba(63, 90, 32, 0.9); }
 .cmp-badge-top .cmp-badge-text {
@@ -418,7 +444,10 @@
   border-color: rgba(255, 255, 255, 0.45);
   color: #16200c;
 }
-.cmp-badge-stacked .cmp-badge-text { font-size: calc(var(--cmp-font, 13px) * 0.68); }
+.cmp-badge-stacked .cmp-badge-text {
+  padding: 0 4px;
+  font-size: calc(var(--cmp-font, 13px) * 0.64);
+}
 
 .cmp-badge-eval.cmp-eval-best .cmp-badge-text {
   background: var(--cmp-best);

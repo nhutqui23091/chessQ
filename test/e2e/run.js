@@ -166,11 +166,25 @@ async function main() {
       !!fromMoves,
       fromMoves ? `${fromMoves.rows} nước, tốt nhất ${fromMoves.first} ${fromMoves.score}` : 'no position');
     check('and says the position came from the move list',
-      !!fromMoves && /đọc từ danh sách nước đi/.test(fromMoves.meta),
+      !!fromMoves && /từ danh sách nước/.test(fromMoves.meta),
       fromMoves ? fromMoves.meta : '');
     check('scores read as a chance of winning by default',
       !!fromMoves && /^\d{1,3}%$/.test(fromMoves.score),
       fromMoves ? fromMoves.score : '');
+    // The badges must sit on the 480px board, not on the 620px column round it.
+    const aligned = await opaque.evaluate(() => {
+      const overlay = document.querySelector('.cmp-overlay');
+      const board = document.querySelector('.board');
+      if (!overlay || !board) return null;
+      const a = overlay.getBoundingClientRect();
+      const b = board.getBoundingClientRect();
+      return { dx: Math.abs(a.left - b.left), dy: Math.abs(a.top - b.top),
+               dw: Math.abs(a.width - b.width) };
+    });
+    check('the badge grid lines up with the board',
+      !!aligned && aligned.dx < 2 && aligned.dy < 2 && aligned.dw < 2,
+      aligned ? `lệch ${aligned.dx.toFixed(1)}px/${aligned.dy.toFixed(1)}px, rộng lệch ${aligned.dw.toFixed(1)}px` : 'no overlay');
+
     await opaque.close();
     void started;
 

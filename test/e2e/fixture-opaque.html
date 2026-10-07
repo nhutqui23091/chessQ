@@ -8,7 +8,10 @@
 <style>
  body{margin:0;background:#312e2b;font-family:system-ui;color:#eee}
  .layout{display:flex;gap:20px;padding:20px}
- #board-layout-chessboard{position:relative}
+ /* A square layout column larger than the board, as the real page has: the
+    overlay must anchor to the board inside it, not to this. */
+ .board-layout-main{position:relative;width:620px;height:620px;padding:70px}
+ #board-layout-chessboard{position:relative;width:480px;height:480px}
  .board{position:relative;width:480px;height:480px;background:#769656}
  .coordinates{position:absolute;inset:0;width:100%;height:100%}
  .gjQxHO{width:280px;font-size:14px;line-height:2}
@@ -17,18 +20,22 @@
  .a7Bq.selected{background:#7fa650;color:#16200c}
 </style></head><body>
 <div class="layout">
-  <div id="board-layout-chessboard">
+  <div class="board-layout-main"><div id="board-layout-chessboard">
     <div class="board">
       <style>.x{}</style>
       <svg class="coordinates" viewBox="0 0 100 100">
         <text class="coordinate-light" x="0.75" y="3.5" font-size="2.8">8</text>
         <text class="coordinate-dark" x="0.75" y="15.75" font-size="2.8">7</text>
         <text class="coordinate-light" x="0.75" y="91" font-size="2.8">1</text>
+        <text class="coordinate-light" x="0.75" y="28" font-size="2.8">6</text>
         <text class="coordinate-dark" x="10" y="99" font-size="2.8">a</text>
+        <text class="coordinate-light" x="22" y="99" font-size="2.8">b</text>
+        <text class="coordinate-dark" x="35" y="99" font-size="2.8">c</text>
+        <text class="coordinate-light" x="97" y="99" font-size="2.8">h</text>
       </svg>
       <div style="width:100%;height:100%;position:absolute"></div>
     </div>
-  </div>
+  </div></div>
   <div class="side">
     <div class="gjQxHO"><div class="pLmNo" id="moves"></div></div>
     <div class="live-game-buttons-component">

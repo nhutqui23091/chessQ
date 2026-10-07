@@ -325,6 +325,20 @@
     handle.addEventListener('pointercancel', endDrag);
   };
 
+  /** Pulls the panel back into view after a resize or a smaller window. */
+  UI.prototype.clampToViewport = function () {
+    var rect = this.panel.getBoundingClientRect();
+    if (!rect.width) return;
+    var maxLeft = window.innerWidth - rect.width - 8;
+    var maxTop = window.innerHeight - 40;
+    if (rect.left > maxLeft || rect.top > maxTop || rect.left < 0 || rect.top < 0) {
+      this.panel.style.left = Math.max(8, Math.min(maxLeft, rect.left)) + 'px';
+      this.panel.style.top = Math.max(8, Math.min(maxTop, rect.top)) + 'px';
+      this.panel.style.right = 'auto';
+      this.panel.style.bottom = 'auto';
+    }
+  };
+
   UI.prototype.emit = function (patch) {
     if (this.callbacks.onSettingsChange) this.callbacks.onSettingsChange(patch);
   };
@@ -350,7 +364,9 @@
     function tick() {
       // Every third frame is plenty to follow scrolling, and keeps us from
       // forcing a layout 60 times a second.
-      if (frames++ % 3 === 0) self.positionOverlay();
+      if (frames % 3 === 0) self.positionOverlay();
+      if (frames % 60 === 0 && self.settings.panelPos) self.clampToViewport();
+      frames++;
       self.frame = requestAnimationFrame(tick);
     }
     this.frame = requestAnimationFrame(tick);
@@ -488,9 +504,10 @@
     bySquare.forEach(function (group) {
       var offset = self.squareOffset(group.square);
       if (!offset) return;
-      var count = group.moves.length;
+      var shown = group.moves.slice(0, 3);
+      var count = shown.length;
 
-      group.moves.forEach(function (move, position) {
+      shown.forEach(function (move, position) {
         var badge = h('div', 'cmp-badge');
         var chip = h('span', 'cmp-badge-text',
           engineMode ? self.formatScore(move) : formatPercent(move.share));
@@ -507,9 +524,10 @@
 
         if (count > 1) {
           badge.classList.add('cmp-badge-stacked');
-          // The chips hang from the top corner, so stack downwards from it.
-          badge.style.transform = 'translateY(' + (position * 26) + '%)';
-          // Name the move: the square alone no longer tells them apart.
+          // Spread the chips down the square's own height so they never spill
+          // onto the squares below, and name each one since the square alone
+          // no longer tells them apart.
+          badge.style.transform = 'translateY(' + (position * 34) + '%)';
           chip.textContent = (move.san || '') + ' ' + chip.textContent;
         }
 
@@ -550,7 +568,7 @@
     line.setAttribute('class', 'cmp-arrow-line');
     var head = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
     var angle = Math.atan2(dy, dx);
-    var size = 3.6;
+    var size = 2.9;
     var points = [
       [x2 - (dx / length) * 1.2, y2 - (dy / length) * 1.2],
       [ex - Math.cos(angle - 0.5) * size, ey - Math.sin(angle - 0.5) * size],
@@ -717,20 +735,22 @@
     els.status.textContent = statusText;
     els.status.style.display = statusText ? '' : 'none';
 
-    var metaParts = [];
-    if (this.state.position && moves.length) {
-      metaParts.push(this.state.position.turn === 'w' ? 'Trắng đi' : 'Đen đi');
-    }
+    // One short line. Everything else lives in its tooltip: five facts strung
+    // together wrapped onto three lines and read like noise.
+    els.meta.textContent = '';
     if (moves.length) {
-      metaParts.push('độ sâu ' + engine.depth);
-      if (engine.context === 'computer') metaParts.push('ván với máy');
+      var turn = this.state.position && this.state.position.turn === 'b' ? 'Đen đi' : 'Trắng đi';
+      els.meta.appendChild(h('span', 'cmp-meta-turn', turn));
+      els.meta.appendChild(h('span', 'cmp-meta-depth', 'độ sâu ' + engine.depth));
+      var detail = ['Điểm tính theo bên đang đi: số càng lớn càng tốt cho ' + turn.toLowerCase()];
+      if (engine.context === 'computer') detail.push('Ván luyện với máy');
       if (this.state.position && this.state.position.source === 'move-list-only') {
-        metaParts.push('đọc từ danh sách nước đi');
+        detail.push('Thế cờ đọc từ danh sách nước đi (bàn cờ vẽ bằng canvas nên không đọc được)');
+        els.meta.appendChild(h('span', 'cmp-meta-tag', 'từ danh sách nước'));
       }
-      metaParts.push('điểm theo bên đang đi');
+      els.meta.title = detail.join('\n');
     }
-    els.meta.textContent = metaParts.join(' · ');
-    els.meta.style.display = metaParts.length ? '' : 'none';
+    els.meta.style.display = moves.length ? '' : 'none';
 
     els.list.textContent = '';
     if (moves.length) {

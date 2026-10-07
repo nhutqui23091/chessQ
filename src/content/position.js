@@ -19,7 +19,7 @@
 (function (root) {
   'use strict';
 
-  var VERSION = '1.6.0';
+  var VERSION = '1.7.0';
   var FILES = 'abcdefgh';
   var PIECE_RE = /(?:^|\s)(?:piece\s+)?([wb])([kqrbnp])(?:\s|$)/;
   var SQUARE_RE = /\bsquare-(\d)(\d)\b/;
@@ -178,24 +178,59 @@
       if (ancestor && isVisible(ancestor)) return ancestor;
     }
 
-    // Still nothing: the board may render its pieces in a way we cannot read
-    // at all (a canvas, a closed shadow root). A big square element is still
-    // worth having — the badges need somewhere to sit, and the position can
-    // come from the move list instead.
-    return findSquareElement();
+    // Still nothing: the board may draw its pieces in a way we cannot read at
+    // all — a canvas, for instance. The badges still need somewhere to sit,
+    // and the position can come from the move list instead.
+    return findCoordinateBoard() || findSquareElement();
   }
 
-  /** A large, roughly square element: the shape of a chessboard. */
+  function isSquarish(rect) {
+    return rect.width >= 160 && rect.height >= 160 &&
+      Math.abs(rect.width - rect.height) <= rect.width * 0.06;
+  }
+
+  /**
+   * The layer holding the a–h / 1–8 labels Chess.com draws into the board.
+   *
+   * This is the most precise anchor available when the pieces are unreadable:
+   * those labels are positioned against the eight-by-eight grid itself, so the
+   * element carrying them is exactly the board — unlike the page's layout
+   * containers, which are also square but much larger.
+   */
+  function findCoordinateBoard() {
+    var svgs = queryAll('svg');
+    for (var i = 0; i < svgs.length; i++) {
+      var labels = svgs[i].querySelectorAll('text');
+      var files = 0;
+      var ranks = 0;
+      for (var j = 0; j < labels.length; j++) {
+        var text = (labels[j].textContent || '').trim();
+        if (/^[a-h]$/.test(text)) files++;
+        else if (/^[1-8]$/.test(text)) ranks++;
+      }
+      if (files < 4 || ranks < 4) continue;
+      if (isSquarish(svgs[i].getBoundingClientRect())) return svgs[i];
+      // The labels can sit in a layer stretched over a non-square parent.
+      var parent = svgs[i].parentElement;
+      if (parent && isSquarish(parent.getBoundingClientRect())) return parent;
+    }
+    return null;
+  }
+
+  /**
+   * A square element of board-ish size. The *smallest* one wins: the board
+   * sits inside layout wrappers that are square too, and picking the biggest
+   * puts the badges on a grid several times too wide.
+   */
   function findSquareElement() {
     var best = null;
-    var bestArea = 0;
+    var bestArea = Infinity;
     var candidates = queryAll(BOARD_SELECTORS.join(','));
     for (var i = 0; i < candidates.length; i++) {
       var rect = candidates[i].getBoundingClientRect();
-      if (rect.width < 200 || rect.height < 200) continue;
-      if (Math.abs(rect.width - rect.height) > rect.width * 0.06) continue;
+      if (!isSquarish(rect)) continue;
       var area = rect.width * rect.height;
-      if (area > bestArea) {
+      if (area < bestArea) {
         best = candidates[i];
         bestArea = area;
       }
@@ -928,6 +963,7 @@
     isFlipped: isFlipped,
     flippedFromCoordinates: flippedFromCoordinates,
     findSquareElement: findSquareElement,
+    findCoordinateBoard: findCoordinateBoard,
     scanPieces: scanPieces,
     placementOf: placementOf,
     cleanSan: cleanSan,

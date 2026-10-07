@@ -1,0 +1,57 @@
+<!doctype html><html><head><meta charset="utf-8">
+<link rel="stylesheet" href="/src/content/styles.css">
+<style>
+ body{margin:0;background:#262421;font-family:system-ui;height:640px}
+ /* Mirrors the reported page: a big square layout column around a smaller board */
+ .board-layout-main{position:relative;width:600px;height:600px;padding:40px 60px}
+ #board-layout-chessboard{position:relative;width:480px;height:480px}
+ .board{position:relative;width:480px;height:480px;display:grid;
+        grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr)}
+ .sq{display:flex;align-items:center;justify-content:center;font-size:40px;line-height:1}
+ .l{background:#eeeed2}.d{background:#769656}
+ .coordinates{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+ .coordinates text{font-size:2.8px;fill:rgba(0,0,0,.45)}
+</style></head><body>
+<div class="board-layout-main"><div id="board-layout-chessboard">
+  <div class="board" id="board"></div>
+  <svg class="coordinates" viewBox="0 0 100 100" id="coords"></svg>
+</div></div>
+<script>window.chrome={runtime:{lastError:null},storage:{sync:{get:(k,c)=>c({}),set:(p,c)=>c&&c()}}};</script>
+<script src="/src/vendor/chess.bundle.js"></script>
+<script src="/src/shared/settings.js"></script>
+<script src="/src/content/position.js"></script>
+<script src="/src/content/ui.js"></script>
+<script>
+var ROWS=['rnbqkbnr','pp1ppppp','........','..p.....','....P...','........','PPPP.PPP','RNBQKBNR'];
+var G={r:'♜',n:'♞',b:'♝',q:'♛',k:'♚',p:'♟',
+       R:'♖',N:'♘',B:'♗',Q:'♕',K:'♔',P:'♙'};
+var board=document.getElementById('board');
+ROWS.forEach(function(row,r){row.split('').forEach(function(ch,c){
+  var sq=document.createElement('div');sq.className='sq '+((r+c)%2?'d':'l');
+  sq.textContent=G[ch]||'';board.appendChild(sq);});});
+var svg=document.getElementById('coords');
+'87654321'.split('').forEach(function(n,i){
+  var t=document.createElementNS('http://www.w3.org/2000/svg','text');
+  t.setAttribute('x','0.75');t.setAttribute('y',(i*12.5+3.5).toFixed(2));
+  t.textContent=n;svg.appendChild(t);});
+'abcdefgh'.split('').forEach(function(f,i){
+  var t=document.createElementNS('http://www.w3.org/2000/svg','text');
+  t.setAttribute('x',(i*12.5+10.5).toFixed(2));t.setAttribute('y','99');
+  t.textContent=f;svg.appendChild(t);});
+
+// After 1.e4 c5 — the position from the report. Engine numbers as the real run gave them.
+var ENGINE={status:'ready',depth:14,context:'computer',moves:[
+ {uci:'g1f3',san:'Nf3',cp:49,mate:null,loss:0,best:true,pvSan:['Nf3','Nc6','Bb5','e5','O-O','Nge7']},
+ {uci:'b1c3',san:'Nc3',cp:42,mate:null,loss:7,best:false,pvSan:['Nc3','Nc6','Nf3','Nf6','d4','d5']},
+ {uci:'g1e2',san:'Ne2',cp:33,mate:null,loss:16,best:false,pvSan:['Ne2','Nf6','Nbc3','e5','Ng3','Nc6']},
+ {uci:'f1e2',san:'Be2',cp:30,mate:null,loss:19,best:false,pvSan:['Be2','Nc6','Nf3','Nf6','Nc3','e6']}
+]};
+var found=CMPPosition.findBoard();
+var ui=new CMPUI({onSettingsChange:function(){}});
+ui.setSettings(CMPSettings.normalize({mode:'engine',engineLines:4}));
+ui.setState({status:'idle',data:null,engine:ENGINE,
+  position:{board:found,flipped:false,turn:'w',source:'move-list-only'}});
+ui.setHovered('g1f3');
+window.__found = found ? found.tagName + '.' + (found.getAttribute('class')||'') +
+  ' ' + Math.round(found.getBoundingClientRect().width) + 'px' : 'none';
+</script></body></html>
