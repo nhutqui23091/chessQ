@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Chess Move % — Opening stats on Chess.com",
-  "version": "1.0.0",
-  "description": "Hiện % nước đi (tần suất, tỉ lệ thắng/hòa/thua) cho thế cờ hiện tại ngay trên bàn cờ Chess.com.",
+  "version": "1.1.0",
+  "description": "Hiện % nước đi và điểm số máy phân tích cho thế cờ trên Chess.com (engine chỉ chạy trên bàn phân tích).",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
@@ -20,27 +20,43 @@
     "service_worker": "src/background/service-worker.js"
   },
   "options_page": "src/options/options.html",
-  "permissions": ["storage"],
-  "host_permissions": ["https://explorer.lichess.ovh/*"],
+  "permissions": [
+    "storage",
+    "offscreen"
+  ],
+  "host_permissions": [
+    "https://explorer.lichess.ovh/*"
+  ],
   "content_scripts": [
     {
-      "matches": ["https://www.chess.com/*", "https://chess.com/*"],
+      "matches": [
+        "https://www.chess.com/*",
+        "https://chess.com/*"
+      ],
       "js": [
         "src/vendor/chess.bundle.js",
         "src/shared/settings.js",
         "src/content/position.js",
+        "src/content/context.js",
         "src/content/ui.js",
         "src/content/content.js"
       ],
-      "css": ["src/content/styles.css"],
+      "css": [
+        "src/content/styles.css"
+      ],
       "run_at": "document_idle",
       "all_frames": false
     }
   ],
   "commands": {
     "toggle-panel": {
-      "suggested_key": { "default": "Alt+P" },
+      "suggested_key": {
+        "default": "Alt+P"
+      },
       "description": "Bật/tắt bảng % nước đi"
     }
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
   }
 }

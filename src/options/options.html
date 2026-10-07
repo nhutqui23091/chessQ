@@ -9,8 +9,8 @@
   <main>
     <h1>Chess Move %</h1>
     <p class="lead">
-      Hiện tần suất (%) và tỉ lệ thắng/hòa/thua của từng nước đi cho thế cờ đang
-      mở trên Chess.com. Dữ liệu lấy từ
+      Hiện tần suất (%) và tỉ lệ thắng/hòa/thua của từng nước đi, hoặc điểm số
+      Stockfish cho từng nước, trên bàn cờ Chess.com. Thống kê lấy từ
       <a href="https://lichess.org/analysis" target="_blank" rel="noreferrer">Lichess opening explorer</a>.
     </p>
 
@@ -22,6 +22,44 @@
     </section>
 
     <section>
+      <h2>Chế độ</h2>
+      <label class="row check">
+        <input type="radio" name="mode" value="explorer">
+        <span>Thống kê khai cuộc<small>Tần suất từng nước trong hàng triệu ván thật.</small></span>
+      </label>
+      <label class="row check">
+        <input type="radio" name="mode" value="engine">
+        <span>Máy phân tích (Stockfish)<small>Điểm số từng nước. Chỉ chạy trên bàn phân tích — xem mục dưới.</small></span>
+      </label>
+    </section>
+
+    <section class="warn">
+      <h2>Fair play</h2>
+      <p>
+        Máy phân tích <strong>chỉ chạy ở chess.com/analysis</strong> (gồm cả Game
+        Review sau ván), và tự tắt nếu trang còn nút đầu hàng của một ván đang
+        diễn ra. Dùng engine trong ván đang đánh là gian lận theo luật Chess.com
+        và sẽ bị khóa tài khoản — giới hạn này cố ý và không tắt được.
+      </p>
+      <p>
+        Thống kê khai cuộc là sách khai cuộc, không phải engine, nhưng cũng là
+        trợ giúp ngoài: hãy tắt tiện ích (Alt+P) khi đang thi đấu.
+      </p>
+    </section>
+
+    <section id="engine-settings">
+      <h2>Máy phân tích</h2>
+      <label class="row">
+        <span>Độ sâu<small>Sâu hơn = chính xác hơn nhưng chậm hơn.</small></span>
+        <input type="number" id="engineDepth" min="8" max="22" step="1">
+      </label>
+      <label class="row">
+        <span>Số nước gợi ý</span>
+        <input type="number" id="engineLines" min="1" max="8" step="1">
+      </label>
+    </section>
+
+    <section id="explorer-settings">
       <h2>Nguồn dữ liệu</h2>
       <label class="row check">
         <input type="radio" name="database" value="lichess">
@@ -31,13 +69,13 @@
         <input type="radio" name="database" value="masters">
         <span>Ván của kiện tướng (OTB, 2200+)<small>Cơ sở dữ liệu cờ bàn, không lọc Elo/thể loại.</small></span>
       </label>
-    </section>
 
-    <section id="lichess-filters">
-      <h2>Thể loại</h2>
-      <div class="chips" id="speeds"></div>
-      <h2>Mức Elo</h2>
-      <div class="chips" id="ratings"></div>
+      <div id="lichess-filters">
+        <h2>Thể loại</h2>
+        <div class="chips" id="speeds"></div>
+        <h2>Mức Elo</h2>
+        <div class="chips" id="ratings"></div>
+      </div>
     </section>
 
     <section>

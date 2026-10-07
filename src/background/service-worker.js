@@ -1,5 +1,9 @@
 /*
- * Fetches opening statistics from the Lichess opening explorer.
+ * Two jobs:
+ *
+ *  1. Fetch opening statistics from the Lichess opening explorer.
+ *  2. Own the offscreen document that hosts Stockfish, and shuttle analysis
+ *     requests and results between the content script and the engine.
  *
  * The content script cannot call the API directly (chess.com's page would be a
  * cross-origin caller), so every lookup goes through here. This worker also
@@ -9,6 +13,13 @@
 'use strict';
 
 importScripts('../shared/settings.js');
+
+var OFFSCREEN_PATH = 'src/offscreen/engine.html';
+var offscreenReady = null;
+var enginePing = null;
+// Which tab asked for which analysis, so streamed results go back to it.
+var analysisRequests = new Map();
+var analysisSeq = 0;
 
 var ENDPOINTS = {
   lichess: 'https://explorer.lichess.ovh/lichess',
@@ -157,11 +168,149 @@ async function lookup(fen, settings) {
   return promise;
 }
 
+/**
+ * Resolves once the offscreen document's message listener is live.
+ *
+ * createDocument() can resolve a touch before the page's scripts have
+ * registered their listener, and this worker can also restart while the
+ * document stays alive — in which case no boot message is coming. So we ping
+ * and accept either answer, with a timeout so a lost ping cannot wedge the
+ * engine for good.
+ */
+function waitForEngine() {
+  if (enginePing) return enginePing;
+  enginePing = new Promise(function (resolve) {
+    engineReadyResolve = resolve;
+    setTimeout(resolve, 3000);
+  });
+  chrome.runtime.sendMessage({ target: 'offscreen', type: 'engine-ping' }, function () {
+    void chrome.runtime.lastError;
+  });
+  return enginePing;
+}
+
+var engineReadyResolve = null;
+
+function markEngineReady() {
+  if (!enginePing) enginePing = Promise.resolve();
+  if (engineReadyResolve) {
+    engineReadyResolve();
+    engineReadyResolve = null;
+  }
+}
+
+/**
+ * Creates the offscreen document on first use. Chrome allows exactly one, so
+ * concurrent callers share a single promise, and an "already exists" error
+ * (possible after the worker restarts) counts as success.
+ */
+function ensureOffscreen() {
+  if (offscreenReady) return offscreenReady;
+  offscreenReady = (async function () {
+    var existed = chrome.offscreen.hasDocument && (await chrome.offscreen.hasDocument());
+    if (!existed) {
+      try {
+        await chrome.offscreen.createDocument({
+          url: OFFSCREEN_PATH,
+          reasons: ['WORKERS'],
+          justification: 'Chạy Stockfish (Web Worker + WASM) để phân tích thế cờ.'
+        });
+      } catch (err) {
+        if (!/single offscreen|already/i.test(String(err && err.message))) {
+          offscreenReady = null;
+          throw err;
+        }
+      }
+    }
+    await waitForEngine();
+  })();
+  return offscreenReady;
+}
+
+async function startAnalysis(message, tabId) {
+  await ensureOffscreen();
+  // Only the newest position per tab is worth computing.
+  for (var [id, entry] of analysisRequests) {
+    if (entry.tabId === tabId) analysisRequests.delete(id);
+  }
+  var id = ++analysisSeq;
+  analysisRequests.set(id, { tabId: tabId, fen: message.fen });
+  chrome.runtime.sendMessage({
+    target: 'offscreen',
+    type: 'engine-analyze',
+    id: id,
+    fen: message.fen,
+    depth: message.depth,
+    lines: message.lines
+  });
+  return { ok: true, id: id };
+}
+
+function routeEngineResult(message) {
+  var entry = analysisRequests.get(message.id);
+  if (!entry) return; // superseded by a newer position
+  if (message.status !== 'progress') analysisRequests.delete(message.id);
+  chrome.tabs.sendMessage(entry.tabId, {
+    type: 'analysis',
+    id: message.id,
+    fen: message.fen,
+    status: message.status,
+    error: message.error,
+    depth: message.depth,
+    nodes: message.nodes,
+    nps: message.nps,
+    moves: message.moves,
+    bestMove: message.bestMove
+  }, function () {
+    // The tab may have navigated away mid-search.
+    void chrome.runtime.lastError;
+  });
+}
+
 chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
-  if (!message || message.type !== 'explorer') return false;
-  var settings = self.CMPSettings.normalize(message.settings);
-  lookup(message.fen, settings).then(sendResponse);
-  return true; // response is async
+  if (!message) return false;
+
+  if (message.type === 'explorer') {
+    var settings = self.CMPSettings.normalize(message.settings);
+    lookup(message.fen, settings).then(sendResponse);
+    return true; // response is async
+  }
+
+  if (message.type === 'analyze') {
+    var tabId = sender.tab && sender.tab.id;
+    if (tabId == null) return false;
+    startAnalysis(message, tabId)
+      .then(sendResponse)
+      .catch(function (err) {
+        sendResponse({ ok: false, error: err && err.message ? err.message : String(err) });
+      });
+    return true;
+  }
+
+  if (message.type === 'analyze-stop') {
+    chrome.runtime.sendMessage({ target: 'offscreen', type: 'engine-stop' }, function () {
+      void chrome.runtime.lastError;
+    });
+    return false;
+  }
+
+  if (message.type === 'engine-ready' && message.target === 'background') {
+    markEngineReady();
+    return false;
+  }
+
+  if (message.type === 'engine-result' && message.target === 'background') {
+    routeEngineResult(message);
+    return false;
+  }
+
+  return false;
+});
+
+chrome.tabs.onRemoved.addListener(function (tabId) {
+  for (var [id, entry] of analysisRequests) {
+    if (entry.tabId === tabId) analysisRequests.delete(id);
+  }
 });
 
 function togglePanelInTab(tabId) {

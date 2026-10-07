@@ -121,9 +121,8 @@ test('switching the database reports the change', (t) => {
 
 test('masters mode hides the speed and rating filters', (t) => {
   const { window } = setup(t, { database: 'masters' });
-  const fields = window.document.querySelectorAll('.cmp-settings .cmp-field');
-  assert.strictEqual(fields[0].style.display, 'none');
-  assert.strictEqual(fields[1].style.display, 'none');
+  const speeds = window.document.querySelector('.cmp-settings .cmp-chips').closest('.cmp-field');
+  assert.strictEqual(speeds.style.display, 'none');
 });
 
 test('the panel is hidden when the extension is switched off', (t) => {

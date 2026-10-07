@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Chess Move % — engine host</title>
+</head>
+<body>
+  <!--
+    Offscreen document. MV3 service workers cannot create Web Workers, and
+    Stockfish needs one, so the engine lives here. Nothing is ever displayed.
+  -->
+  <script src="../shared/uci.js"></script>
+  <script src="engine.js"></script>
+</body>
+</html>

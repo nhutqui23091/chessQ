@@ -78,12 +78,12 @@ test('toggling from the toolbar hides and restores the panel', async (t) => {
   const panel = window.document.querySelector('.cmp-panel');
   assert.ok(!panel.classList.contains('cmp-hidden'));
 
-  assert.strictEqual(messageListeners.length, 1);
-  messageListeners[0]({ type: 'toggle-panel' }, {}, () => {});
+  const toggle = () => messageListeners.forEach((fn) => fn({ type: 'toggle-panel' }, {}, () => {}));
+  toggle();
   assert.ok(panel.classList.contains('cmp-hidden'));
   assert.strictEqual(stored.showPanel, false);
 
-  messageListeners[0]({ type: 'toggle-panel' }, {}, () => {});
+  toggle();
   assert.ok(!panel.classList.contains('cmp-hidden'));
   assert.strictEqual(stored.showPanel, true);
 });

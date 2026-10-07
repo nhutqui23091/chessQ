@@ -114,3 +114,79 @@ test('retries once after a rate-limit response', async () => {
   assert.strictEqual(result.ok, true);
   assert.strictEqual(calls.length, 2);
 });
+
+// --- engine routing ------------------------------------------------------
+
+test('an analysis request creates the offscreen document once', async (t) => {
+  const { sandbox } = loadServiceWorker(async () => jsonResponse(SAMPLE));
+  await sandbox.startAnalysis({ fen: FEN, depth: 14, lines: 4 }, 7);
+  await sandbox.startAnalysis({ fen: FEN, depth: 14, lines: 4 }, 7);
+  assert.strictEqual(sandbox.__offscreen.length, 1);
+  assert.strictEqual(sandbox.__offscreen[0].reasons[0], 'WORKERS');
+});
+
+test('an analysis request is forwarded to the engine with its settings', async (t) => {
+  const { sandbox } = loadServiceWorker(async () => jsonResponse(SAMPLE));
+  await sandbox.startAnalysis({ fen: FEN, depth: 18, lines: 3 }, 7);
+  const sent = sandbox.__sentToOffscreen[sandbox.__sentToOffscreen.length - 1];
+  assert.strictEqual(sent.target, 'offscreen');
+  assert.strictEqual(sent.type, 'engine-analyze');
+  assert.strictEqual(sent.fen, FEN);
+  assert.strictEqual(sent.depth, 18);
+  assert.strictEqual(sent.lines, 3);
+});
+
+test('results are routed back to the tab that asked', async (t) => {
+  const { sandbox } = loadServiceWorker(async () => jsonResponse(SAMPLE));
+  const started = await sandbox.startAnalysis({ fen: FEN, depth: 14, lines: 4 }, 42);
+  sandbox.routeEngineResult({
+    id: started.id, fen: FEN, status: 'done', depth: 14, moves: [{ uci: 'e2e4' }]
+  });
+  assert.strictEqual(sandbox.__sentToTabs.length, 1);
+  assert.strictEqual(sandbox.__sentToTabs[0].tabId, 42);
+  assert.strictEqual(sandbox.__sentToTabs[0].message.type, 'analysis');
+  assert.strictEqual(sandbox.__sentToTabs[0].message.status, 'done');
+});
+
+test('results for a superseded position are dropped', async (t) => {
+  const { sandbox } = loadServiceWorker(async () => jsonResponse(SAMPLE));
+  const first = await sandbox.startAnalysis({ fen: FEN, depth: 14, lines: 4 }, 42);
+  await sandbox.startAnalysis({ fen: '8/8/8/8/8/8/8/K6k w - - 0 1', depth: 14, lines: 4 }, 42);
+  sandbox.routeEngineResult({ id: first.id, fen: FEN, status: 'done', moves: [] });
+  assert.strictEqual(sandbox.__sentToTabs.length, 0);
+});
+
+test('progress results keep streaming, final results close the request', async (t) => {
+  const { sandbox } = loadServiceWorker(async () => jsonResponse(SAMPLE));
+  const started = await sandbox.startAnalysis({ fen: FEN, depth: 14, lines: 4 }, 42);
+  sandbox.routeEngineResult({ id: started.id, fen: FEN, status: 'progress', moves: [] });
+  sandbox.routeEngineResult({ id: started.id, fen: FEN, status: 'progress', moves: [] });
+  sandbox.routeEngineResult({ id: started.id, fen: FEN, status: 'done', moves: [] });
+  sandbox.routeEngineResult({ id: started.id, fen: FEN, status: 'done', moves: [] });
+  assert.strictEqual(sandbox.__sentToTabs.length, 3);
+});
+
+test('each tab gets its own analysis slot', async (t) => {
+  const { sandbox } = loadServiceWorker(async () => jsonResponse(SAMPLE));
+  const a = await sandbox.startAnalysis({ fen: FEN, depth: 14, lines: 4 }, 1);
+  const b = await sandbox.startAnalysis({ fen: FEN, depth: 14, lines: 4 }, 2);
+  sandbox.routeEngineResult({ id: a.id, fen: FEN, status: 'done', moves: [] });
+  sandbox.routeEngineResult({ id: b.id, fen: FEN, status: 'done', moves: [] });
+  assert.deepStrictEqual(sandbox.__sentToTabs.map((entry) => entry.tabId), [1, 2]);
+});
+
+test('waits for the engine to answer before sending work', async (t) => {
+  const { sandbox } = loadServiceWorker(async () => jsonResponse(SAMPLE));
+  let resolved = false;
+  const pending = sandbox.ensureOffscreen().then(() => { resolved = true; });
+
+  // The document is created first, so the ping lands a few microtasks later.
+  await new Promise((r) => setTimeout(r, 30));
+  assert.ok(sandbox.__sentToOffscreen.some((m) => m.type === 'engine-ping'),
+    'a ping should have been sent');
+  assert.strictEqual(resolved, false, 'must not proceed before the engine answers');
+
+  sandbox.markEngineReady();
+  await pending;
+  assert.strictEqual(resolved, true);
+});

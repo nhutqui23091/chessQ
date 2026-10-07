@@ -1,8 +1,8 @@
 {
   "name": "chess-move-percent",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
-  "description": "Chrome extension showing opening move percentages on Chess.com",
+  "description": "Chrome extension showing opening move percentages and engine evaluations on Chess.com",
   "scripts": {
     "test": "node --test test/*.test.js",
     "icons": "node tools/make-icons.js",
@@ -13,5 +13,6 @@
     "chess.js": "1.4.0",
     "esbuild": "^0.25.0",
     "jsdom": "^26.0.0"
-  }
+  },
+  "license": "GPL-3.0-or-later"
 }

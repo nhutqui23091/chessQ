@@ -94,15 +94,31 @@ function loadServiceWorker(fetchImpl) {
       return fetchImpl(url, init);
     },
     chrome: {
-      runtime: { onMessage: { addListener() {} }, lastError: null },
+      runtime: {
+        onMessage: { addListener: (fn) => sandbox.__messageListeners.push(fn) },
+        sendMessage: (message) => sandbox.__sentToOffscreen.push(message),
+        lastError: null
+      },
       action: { onClicked: { addListener() {} } },
       commands: { onCommand: { addListener() {} } },
-      tabs: { query() {}, sendMessage() {} },
+      offscreen: {
+        createDocument: async (options) => { sandbox.__offscreen.push(options); },
+        hasDocument: async () => sandbox.__offscreen.length > 0
+      },
+      tabs: {
+        query() {},
+        sendMessage: (tabId, message) => sandbox.__sentToTabs.push({ tabId, message }),
+        onRemoved: { addListener() {} }
+      },
       storage: { sync: { get() {}, set() {} } }
     }
   };
   sandbox.self = sandbox;
   sandbox.globalThis = sandbox;
+  sandbox.__messageListeners = [];
+  sandbox.__sentToOffscreen = [];
+  sandbox.__sentToTabs = [];
+  sandbox.__offscreen = [];
   sandbox.importScripts = (rel) => {
     const file = path.join(ROOT, 'src/background', rel);
     vm.runInContext(fs.readFileSync(file, 'utf8'), sandbox, { filename: file });
@@ -132,8 +148,13 @@ function makeUiWindow(html) {
  * A jsdom window running the complete content-script stack against a stubbed
  * chrome API — the same wiring the extension gets inside a chess.com tab.
  */
-function makeContentWindow(html, explorerData) {
-  const dom = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true });
+function makeContentWindow(html, explorerData, options) {
+  const opts = options || {};
+  const dom = new JSDOM(html, {
+    runScripts: 'outside-only',
+    pretendToBeVisual: true,
+    url: opts.url || 'https://www.chess.com/play/online'
+  });
   const { window } = dom;
   window.Element.prototype.getBoundingClientRect = function () {
     const size = this.dataset && this.dataset.size ? Number(this.dataset.size) : 0;
@@ -164,14 +185,20 @@ function makeContentWindow(html, explorerData) {
     }
   };
 
+  Object.assign(stored, opts.settings || {});
+
   loadInto(window, [
     'src/vendor/chess.bundle.js',
     'src/shared/settings.js',
     'src/content/position.js',
+    'src/content/context.js',
     'src/content/ui.js',
     'src/content/content.js'
   ]);
-  return { window, sent, stored, messageListeners };
+
+  /** Delivers a message as the background worker would. */
+  const deliver = (message) => messageListeners.forEach((fn) => fn(message, {}, () => {}));
+  return { window, sent, stored, messageListeners, deliver };
 }
 
 module.exports = { makeWindow, makeUiWindow, makeContentWindow, boardHtml, moveListHtml, loadServiceWorker, ROOT };

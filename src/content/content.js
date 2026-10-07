@@ -12,15 +12,93 @@
   var ui = null;
   var currentFen = null;
   var requestToken = 0;
+  var engineState = { status: 'idle', moves: [], depth: 0, reason: null, error: null };
   var boardEl = null;
   var observer = null;
   var pollTimer = null;
   var debounceTimer = null;
 
+  function setEngine(patch) {
+    engineState = Object.assign({}, engineState, patch);
+    ui.setState({
+      status: ui.state.status,
+      data: ui.state.data,
+      position: ui.state.position,
+      error: ui.state.error,
+      engine: engineState
+    });
+  }
+
+  /**
+   * Turns the engine's UCI moves into SAN, which is what a player reads.
+   * Returns the moves unchanged if the FEN will not load — better a row of
+   * "e2e4" than no rows at all.
+   */
+  function toSan(fen, moves) {
+    if (!root.ChessLib || !root.ChessLib.Chess) return moves;
+    return moves.map(function (move) {
+      var line = [];
+      var san = null;
+      try {
+        var game = new root.ChessLib.Chess(fen);
+        for (var i = 0; i < move.pv.length; i++) {
+          var played = game.move(uciToMove(move.pv[i]));
+          if (!played) break;
+          line.push(played.san);
+        }
+        san = line[0] || null;
+      } catch (err) {
+        san = null;
+      }
+      return Object.assign({}, move, { san: san, pvSan: line.length ? line : null });
+    });
+  }
+
+  function uciToMove(uci) {
+    var move = { from: uci.slice(0, 2), to: uci.slice(2, 4) };
+    if (uci.length > 4) move.promotion = uci.charAt(4);
+    return move;
+  }
+
+  function requestEngine(position) {
+    var gate = root.CMPContext.engineStatus();
+    if (!gate.allowed) {
+      setEngine({ status: 'blocked', reason: gate.reason, moves: [], depth: 0, error: null });
+      return;
+    }
+    setEngine({ status: 'thinking', reason: null, moves: [], depth: 0, error: null });
+    try {
+      chrome.runtime.sendMessage({
+        type: 'analyze',
+        fen: position.fen,
+        depth: settings.engineDepth,
+        lines: settings.engineLines
+      }, function (response) {
+        if (chrome.runtime.lastError) {
+          setEngine({ status: 'error', error: chrome.runtime.lastError.message, moves: [] });
+          return;
+        }
+        if (response && !response.ok) {
+          setEngine({ status: 'error', error: response.error, moves: [] });
+        }
+      });
+    } catch (err) {
+      setEngine({ status: 'error', error: 'mất kết nối tiện ích', moves: [] });
+    }
+  }
+
+  function stopEngine() {
+    try {
+      chrome.runtime.sendMessage({ type: 'analyze-stop' }, function () {
+        void chrome.runtime.lastError;
+      });
+    } catch (err) { /* extension reloaded */ }
+  }
+
   function requestStats(position) {
     var token = ++requestToken;
     var fen = position.fen;
-    ui.setState({ status: 'loading', data: null, position: position });
+    ui.setState({ status: 'loading', data: null, position: position, engine: engineState });
     try {
       chrome.runtime.sendMessage({
         type: 'explorer',
@@ -38,20 +116,25 @@
             status: 'error',
             data: null,
             position: position,
+            engine: engineState,
             error: (chrome.runtime.lastError && chrome.runtime.lastError.message) ||
               'không nhận được phản hồi'
           });
           return;
         }
         if (!response.ok) {
-          ui.setState({ status: 'error', data: null, position: position, error: response.error });
+          ui.setState({
+            status: 'error', data: null, position: position, engine: engineState, error: response.error
+          });
           return;
         }
-        ui.setState({ status: 'ready', data: response.data, position: position });
+        ui.setState({ status: 'ready', data: response.data, position: position, engine: engineState });
       });
     } catch (err) {
       // Happens when the extension is reloaded while the page stays open.
-      ui.setState({ status: 'error', data: null, position: position, error: 'mất kết nối tiện ích' });
+      ui.setState({
+        status: 'error', data: null, position: position, engine: engineState, error: 'mất kết nối tiện ích'
+      });
     }
   }
 
@@ -73,7 +156,8 @@
     if (!position) {
       currentFen = null;
       if (ui.state.status !== 'no-board') {
-        ui.setState({ status: 'no-board', data: null, position: null });
+        engineState = { status: 'idle', moves: [], depth: 0, reason: null, error: null };
+        ui.setState({ status: 'no-board', data: null, position: null, engine: engineState });
       }
       if (boardEl) attachObserver(null);
       return;
@@ -88,7 +172,19 @@
       return;
     }
     currentFen = position.fen;
-    requestStats(position);
+    analyzePosition(position);
+  }
+
+  /** Runs whichever source the current mode needs for this position. */
+  function analyzePosition(position) {
+    if (settings.mode === 'engine') {
+      // Keep the panel's position reference fresh even though the explorer is
+      // not queried in this mode.
+      ui.setState({ status: 'idle', data: null, position: position, engine: engineState });
+      requestEngine(position);
+    } else {
+      requestStats(position);
+    }
   }
 
   function scheduleSync() {
@@ -103,13 +199,20 @@
 
     if (!settings.enabled) {
       currentFen = null;
-      ui.setState({ status: 'idle', data: null, position: null });
+      stopEngine();
+      engineState = { status: 'idle', moves: [], depth: 0, reason: null, error: null };
+      ui.setState({ status: 'idle', data: null, position: null, engine: engineState });
       return;
     }
 
-    var queryChanged = previous.database !== settings.database ||
+    var queryChanged = previous.mode !== settings.mode ||
+      previous.database !== settings.database ||
       previous.speeds.join() !== settings.speeds.join() ||
-      previous.ratings.join() !== settings.ratings.join();
+      previous.ratings.join() !== settings.ratings.join() ||
+      previous.engineDepth !== settings.engineDepth ||
+      previous.engineLines !== settings.engineLines;
+
+    if (previous.mode === 'engine' && settings.mode !== 'engine') stopEngine();
 
     if (queryChanged || (options && options.force)) {
       currentFen = null;
@@ -141,6 +244,24 @@
       });
       if (!touched) return;
       applySettings(root.CMPSettings.normalize(Object.assign({}, settings, patch)));
+    });
+
+    chrome.runtime.onMessage.addListener(function (message) {
+      if (!message || message.type !== 'analysis') return false;
+      // Results for a position we have already moved on from are discarded.
+      if (message.fen !== currentFen || settings.mode !== 'engine') return false;
+      if (message.status === 'error') {
+        setEngine({ status: 'error', error: message.error, moves: [] });
+        return false;
+      }
+      setEngine({
+        status: message.status === 'done' ? 'ready' : 'thinking',
+        moves: toSan(message.fen, message.moves || []),
+        depth: message.depth || 0,
+        nodes: message.nodes || 0,
+        error: null
+      });
+      return false;
     });
 
     chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {

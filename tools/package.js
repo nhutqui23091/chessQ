@@ -11,8 +11,9 @@ const path = require('path');
 const zlib = require('zlib');
 
 const ROOT = path.join(__dirname, '..');
-const INCLUDE = ['manifest.json', 'icons', 'src'];
-const SKIP = new Set(['LICENSE-chess.js.txt']);
+// The vendored licences ship with the build: Stockfish is GPL-3.0 and the
+// licence has to travel with the binary.
+const INCLUDE = ['manifest.json', 'LICENSE', 'NOTICE.md', 'icons', 'src'];
 
 function walk(relative, out) {
   const absolute = path.join(ROOT, relative);
@@ -21,7 +22,7 @@ function walk(relative, out) {
     for (const entry of fs.readdirSync(absolute).sort()) {
       walk(path.join(relative, entry), out);
     }
-  } else if (!SKIP.has(path.basename(relative))) {
+  } else {
     out.push({ name: relative.split(path.sep).join('/'), data: fs.readFileSync(absolute) });
   }
   return out;

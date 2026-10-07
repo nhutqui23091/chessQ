@@ -13,6 +13,11 @@
   --cmp-green: #7fa650;
   --cmp-accent: #f0c541;
   --cmp-drawer: rgba(0, 0, 0, 0.18);
+  --cmp-best: #7fa650;
+  --cmp-good: #c3d9a0;
+  --cmp-ok: #e8c34a;
+  --cmp-bad: #e08c3e;
+  --cmp-blunder: #d4564f;
 
   position: fixed;
   right: 16px;
@@ -68,10 +73,35 @@
 }
 .cmp-panel.cmp-masters .cmp-dot { background: var(--cmp-accent); }
 
-.cmp-db {
+/* --- mode switch --- */
+.cmp-modes {
+  display: flex;
   flex: 0 0 auto;
-  max-width: 132px;
-  padding: 2px 4px;
+  border: 1px solid var(--cmp-line);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.cmp-mode {
+  padding: 2px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--cmp-muted);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.cmp-mode + .cmp-mode { border-left: 1px solid var(--cmp-line); }
+.cmp-mode:hover { color: var(--cmp-text); }
+.cmp-mode-on {
+  background: var(--cmp-green);
+  color: #16200c;
+  font-weight: 600;
+}
+.cmp-panel.cmp-engine-mode .cmp-dot { background: var(--cmp-accent); }
+
+.cmp-db {
+  width: 100%;
+  padding: 3px 5px;
   border: 1px solid var(--cmp-line);
   border-radius: 5px;
   background: var(--cmp-bg);
@@ -125,6 +155,18 @@
 
 /* --- settings drawer --- */
 .cmp-settings { display: none; }
+.cmp-panel.cmp-engine-mode .cmp-explorer-only { display: none; }
+.cmp-panel:not(.cmp-engine-mode) .cmp-engine-only { display: none; }
+
+.cmp-range { display: flex; align-items: center; gap: 8px; }
+.cmp-range input[type="range"] { flex: 1 1 auto; accent-color: var(--cmp-green); }
+.cmp-range-value {
+  min-width: 18px;
+  text-align: right;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
 .cmp-panel.cmp-settings-open .cmp-settings {
   display: block;
   margin-bottom: 8px;
@@ -178,6 +220,37 @@
   padding: 3px 4px;
   border-radius: 5px;
 }
+/* --- engine rows --- */
+.cmp-row-eng { grid-template-columns: 54px 56px 1fr; }
+.cmp-san-best { color: var(--cmp-best); }
+.cmp-c-eval { display: flex; }
+.cmp-eval {
+  display: inline-block;
+  min-width: 46px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  text-align: center;
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #16200c;
+}
+.cmp-eval-best {
+  background: var(--cmp-best);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.55);
+}
+.cmp-eval-good { background: var(--cmp-good); }
+.cmp-eval-ok { background: var(--cmp-ok); }
+.cmp-eval-bad { background: var(--cmp-bad); }
+.cmp-eval-blunder { background: var(--cmp-blunder); color: #fff; }
+.cmp-c-pv {
+  overflow: hidden;
+  color: var(--cmp-muted);
+  font-size: 11px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .cmp-row-head {
   color: var(--cmp-muted);
   font-size: 9.5px;
@@ -301,6 +374,35 @@
 }
 .cmp-badge > * { position: relative; }
 .cmp-badge-mid::before { background: rgba(63, 90, 32, 0.74); }
+
+/* Engine badges carry a score, so they are wider than the round % badges. */
+.cmp-badge-eval { font-size: calc(var(--cmp-font, 13px) * 0.92); }
+.cmp-badge-eval::before {
+  width: 86%;
+  height: 50%;
+  border-radius: 6px;
+}
+.cmp-badge-stacked {
+  font-size: calc(var(--cmp-font, 13px) * 0.72);
+}
+.cmp-badge-stacked::before {
+  height: 38%;
+  border-color: rgba(255, 255, 255, 0.5);
+}
+.cmp-badge-eval.cmp-eval-best { color: #16200c; }
+.cmp-badge-eval.cmp-eval-best::before {
+  background: var(--cmp-best);
+  border-color: #fff;
+  border-width: 2px;
+}
+.cmp-badge-eval.cmp-eval-good { color: #16200c; }
+.cmp-badge-eval.cmp-eval-good::before { background: var(--cmp-good); }
+.cmp-badge-eval.cmp-eval-ok { color: #231d05; }
+.cmp-badge-eval.cmp-eval-ok::before { background: var(--cmp-ok); }
+.cmp-badge-eval.cmp-eval-bad { color: #2a1704; }
+.cmp-badge-eval.cmp-eval-bad::before { background: var(--cmp-bad); }
+.cmp-badge-eval.cmp-eval-blunder { color: #fff; }
+.cmp-badge-eval.cmp-eval-blunder::before { background: var(--cmp-blunder); }
 .cmp-badge-top::before {
   background: rgba(127, 166, 80, 0.86);
   border-color: rgba(255, 255, 255, 0.4);
@@ -319,6 +421,7 @@
     --cmp-text: #2b2a27;
     --cmp-muted: #6d6a66;
     --cmp-drawer: rgba(0, 0, 0, 0.035);
+    --cmp-good: #b4cf8c;
   }
   .cmp-wdl { background: #e7e5e1; }
   .cmp-wdl-w { background: #fbfbfa; color: #2b2a27; box-shadow: inset 0 0 0 1px #dcdad5; }

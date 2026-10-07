@@ -58,10 +58,17 @@
     $('showBoardBadges').checked = settings.showBoardBadges;
     $('badgeCount').value = settings.badgeCount;
     $('minPercent').value = settings.minPercent;
+    $('engineDepth').value = settings.engineDepth;
+    $('engineLines').value = settings.engineLines;
     document.querySelectorAll('input[name="database"]').forEach(function (radio) {
       radio.checked = radio.value === settings.database;
     });
+    document.querySelectorAll('input[name="mode"]').forEach(function (radio) {
+      radio.checked = radio.value === settings.mode;
+    });
     $('lichess-filters').hidden = settings.database === 'masters';
+    $('engine-settings').hidden = settings.mode !== 'engine';
+    $('explorer-settings').hidden = settings.mode === 'engine';
 
     buildChips($('speeds'), CMPSettings.SPEED_OPTIONS,
       function (speed) { return SPEED_LABELS[speed] || speed; },
@@ -96,9 +103,20 @@
     $('minPercent').addEventListener('change', function () {
       update({ minPercent: Number(this.value) });
     });
+    $('engineDepth').addEventListener('change', function () {
+      update({ engineDepth: Number(this.value) });
+    });
+    $('engineLines').addEventListener('change', function () {
+      update({ engineLines: Number(this.value) });
+    });
     document.querySelectorAll('input[name="database"]').forEach(function (radio) {
       radio.addEventListener('change', function () {
         if (this.checked) update({ database: this.value });
+      });
+    });
+    document.querySelectorAll('input[name="mode"]').forEach(function (radio) {
+      radio.addEventListener('change', function () {
+        if (this.checked) update({ mode: this.value });
       });
     });
     $('reset').addEventListener('click', function () {

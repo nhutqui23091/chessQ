@@ -1,128 +1,151 @@
-# Chess Move % — tiện ích hiện % nước đi trên Chess.com
+# Chess Move % — tiện ích cho Chess.com
 
-Tiện ích Chrome (Manifest V3) hiển thị **tần suất từng nước đi** và **tỉ lệ
-thắng / hòa / thua** cho đúng thế cờ đang mở trên Chess.com — ngay trên bàn cờ
-và trong một bảng nhỏ có thể kéo thả.
+Tiện ích Chrome (Manifest V3) cho thế cờ đang mở trên Chess.com, hai chế độ:
 
-Dữ liệu lấy từ [Lichess opening explorer](https://lichess.org/analysis) (miễn
-phí, không cần tài khoản hay API key):
+* **Thống kê** — tần suất (%) từng nước đi và tỉ lệ thắng/hòa/bại trong hàng
+  triệu ván thật, lấy từ [Lichess opening explorer](https://lichess.org/analysis).
+* **Máy phân tích** — điểm số Stockfish cho từng nước, hiện ngay trên ô đích và
+  tô màu theo chất lượng nước đi. **Chỉ chạy trên bàn phân tích** — xem
+  [Fair play](#fair-play).
 
-* **Ván của người chơi Lichess** — lọc được theo thể loại (bullet → classical)
-  và mức Elo.
-* **Ván của kiện tướng (OTB)** — cơ sở dữ liệu cờ bàn trình độ 2200+.
+Cả hai chế độ đều vẽ huy hiệu lên bàn cờ và liệt kê chi tiết trong một bảng nhỏ
+kéo thả được.
+
+## Fair play
+
+Máy phân tích **chỉ chạy ở `chess.com/analysis`** (bao gồm Game Review sau ván),
+và tự tắt nếu trang vẫn còn nút đầu hàng của một ván đang diễn ra.
+
+Lý do: dùng engine trong ván đang đánh là gian lận theo luật Chess.com — nó hại
+đối thủ thật và sẽ khiến tài khoản bị đóng. Giới hạn này là cố ý, không có nút
+tắt. Tiện ích này để **ôn khai cuộc và mổ lại ván đã đấu**, đó cũng là cách thực
+sự lên trình.
+
+Thống kê khai cuộc là *sách khai cuộc* chứ không phải engine, nên không bị chặn
+theo trang — nhưng nó vẫn là trợ giúp ngoài, hãy tắt (Alt+P) khi đang thi đấu.
 
 ## Tính năng
 
 | | |
 |---|---|
-| **% trên bàn cờ** | Huy hiệu phần trăm đặt ngay ô đích của các nước phổ biến nhất |
-| **Bảng thống kê** | Tần suất, tỉ lệ thắng/hòa/thua, số ván, Elo trung bình cho từng nước |
+| **Điểm trên bàn cờ** | Mỗi nước ứng viên có một huy hiệu điểm ngay ô đích, màu từ xanh (tốt nhất) tới đỏ (sai lầm) |
+| **Nhiều nước cùng ô** | Hai nước cùng đích (c3 và Nc3) được tách ra và ghi rõ tên nước |
+| **Biến chính** | Mỗi nước kèm biến chính dạng SAN, rê chuột để thấy mũi tên trên bàn cờ |
+| **Thống kê thật** | Tần suất, thắng/hòa/bại, số ván, Elo trung bình cho từng nước |
 | **Tên khai cuộc** | Mã ECO + tên khai cuộc của thế cờ hiện tại |
-| **Mũi tên gợi ý** | Rê chuột lên một dòng để thấy nước đi đó trên bàn cờ |
-| **Theo dõi mọi chế độ** | Ván trực tiếp, phân tích, xem lại ván, bàn cờ lật ngược |
-| **Bộ lọc** | Thể loại và mức Elo đổi trực tiếp trong bảng hoặc ở trang tùy chọn |
+| **Theo dõi mọi chế độ** | Ván trực tiếp, phân tích, xem lại ván, puzzle, bàn cờ lật ngược |
+| **Bộ lọc** | Thể loại, mức Elo, độ sâu máy, số nước gợi ý |
 
-Tiện ích chỉ **đọc** thế cờ từ giao diện; nó không gửi nước đi, không can thiệp
-vào ván đấu và không đọc tài khoản của bạn.
-
-> ⚠️ **Lưu ý fair play:** Chess.com cấm dùng trợ giúp ngoài trong **ván đang
-> chơi**. Tiện ích này tra cứu thống kê khai cuộc, tức là trợ giúp ngoài. Hãy
-> dùng nó để **ôn khai cuộc và phân tích ván đã đấu**, và tắt đi (Alt+P hoặc
-> tắt hẳn trong trang tùy chọn) khi đang thi đấu.
+Tiện ích chỉ **đọc** thế cờ từ giao diện; nó không tự đi nước nào, không gửi gì
+về máy chủ nào ngoài Lichess, và không đọc tài khoản của bạn. Engine chạy hoàn
+toàn trong máy bạn (WebAssembly).
 
 ## Cài đặt
 
-Tiện ích chưa có trên Chrome Web Store, cài thủ công như sau:
+Chưa có trên Chrome Web Store, cài thủ công:
 
-1. Tải mã nguồn: `git clone https://github.com/nhutqui23091/chessQ.git`
-2. Mở `chrome://extensions` trong Chrome / Edge / Brave.
+1. `git clone https://github.com/nhutqui23091/chessQ.git`
+2. Mở `chrome://extensions`.
 3. Bật **Developer mode** (góc trên bên phải).
-4. Bấm **Load unpacked** và chọn thư mục vừa tải về.
-5. Mở một ván cờ trên chess.com — bảng thống kê hiện ở góc dưới bên phải.
+4. **Load unpacked** → chọn thư mục vừa tải.
+5. Mở một ván trên chess.com — bảng hiện ở góc dưới bên phải.
 
-Không cần bước build: `src/vendor/chess.bundle.js` đã được đóng gói sẵn trong
-repo.
+Không cần build: `chess.bundle.js` và Stockfish đã đóng gói sẵn trong repo.
 
 ## Sử dụng
 
 * **Alt+P** hoặc bấm biểu tượng tiện ích: ẩn/hiện bảng.
+* Nút **Thống kê / Máy** ở thanh tiêu đề: đổi chế độ.
 * Kéo thanh tiêu đề để di chuyển bảng (vị trí được ghi nhớ).
-* **⚙** trong bảng: đổi thể loại / mức Elo / bật tắt % trên bàn cờ.
-* **–** thu gọn bảng, **×** ẩn bảng.
-* Ô chọn ở thanh tiêu đề: đổi giữa dữ liệu người chơi Lichess và kiện tướng.
+* **⚙**: nguồn dữ liệu, thể loại, mức Elo, độ sâu máy, số nước gợi ý.
+* Rê chuột lên một dòng để thấy nước đó trên bàn cờ.
 
-Khi thế cờ đã ra khỏi sách khai cuộc, bảng sẽ báo "Không có dữ liệu cho thế cờ
-này" — đó là bình thường.
+**Điểm số tính theo bên đang đi**: số càng lớn càng tốt cho người sắp đi, nên
+nước trên cùng luôn là nước tốt nhất cho bạn. `M3` nghĩa là chiếu hết sau 3 nước.
 
 ## Cách hoạt động
 
 ```
 chess.com DOM ──► src/content/position.js ──► FEN
                                                │
-            src/content/content.js ◄───────────┘
-                     │  chrome.runtime.sendMessage
-                     ▼
-         src/background/service-worker.js ──► explorer.lichess.ovh
-                     │  (cache, gộp request trùng, giới hạn tốc độ)
-                     ▼
-              src/content/ui.js ──► bảng + huy hiệu % trên bàn cờ
+                     src/content/content.js ◄──┘
+                       │                   │
+        chế độ Thống kê│                   │chế độ Máy (qua src/content/context.js)
+                       ▼                   ▼
+   explorer.lichess.ovh                offscreen document
+   (cache + gộp request)               └─► Stockfish WASM (Web Worker, UCI)
+                       │                   │
+                       └──────►  src/content/ui.js  ◄──┘
+                                 bảng + huy hiệu trên bàn cờ
 ```
 
-Thế cờ được đọc từ **hai nguồn độc lập**, vì Chess.com đổi HTML của danh sách
-nước đi thường xuyên hơn nhiều so với HTML của quân cờ:
+Máy phân tích sống trong một **offscreen document** vì service worker của MV3
+không tạo được Web Worker, còn Stockfish thì cần. Service worker giữ vòng đời
+tài liệu đó, bắt tay chờ engine sẵn sàng, và chuyển kết quả về đúng tab. Kết quả
+được gửi dần theo từng độ sâu nên điểm số hiện ngay rồi mới chính xác dần.
 
-1. **Quân cờ trên bàn** (`<div class="piece wp square-52">`) — cho vị trí chính
-   xác nhưng không biết ai đi, quyền nhập thành hay bắt tốt qua đường.
+### Đọc thế cờ
+
+Thế cờ đọc từ **hai nguồn độc lập**, vì Chess.com đổi HTML của danh sách nước đi
+thường xuyên hơn nhiều so với HTML của quân cờ:
+
+1. **Quân cờ trên bàn** (`<div class="piece wp square-52">`) — vị trí chính xác
+   nhưng không biết ai đi, quyền nhập thành hay bắt tốt qua đường.
 2. **Danh sách nước đi**, phát lại bằng `chess.js` — cho FEN đầy đủ.
 
 Danh sách nước đi chỉ được tin khi vị trí phát lại **khớp** với quân cờ đang
-hiển thị. Nhờ vậy tiện ích vẫn đúng khi bạn tua ngược ván, xem biến phụ, hay mở
-một puzzle bắt đầu từ thế cờ bất kỳ. Nếu không khớp, tiện ích suy ra lượt đi từ
-ô được tô sáng của nước vừa đi, quyền nhập thành từ vị trí vua/xe, và ô bắt tốt
-qua đường chỉ khi thực sự có tốt đối phương bắt được.
+hiển thị, nên tua ngược ván, xem biến phụ hay mở puzzle từ thế cờ bất kỳ đều
+đúng. Nếu không khớp, tiện ích suy lượt đi từ ô tô sáng của nước vừa đi, quyền
+nhập thành từ vị trí vua/xe, và ô bắt tốt qua đường chỉ khi thật sự có tốt bắt
+được.
 
 ## Phát triển
 
 ```bash
-npm install          # chỉ cần cho test và các script build
-npm test             # 44 test: đọc thế cờ, API, giao diện, manifest
+npm install          # chỉ cần cho test và script build
+npm test             # 90 test: đọc thế cờ, UCI, cổng fair play, API, giao diện, manifest
 npm run icons        # tạo lại icons/*.png
 npm run zip          # đóng gói dist/chess-move-percent-<version>.zip
-npm run bundle:chess # đóng gói lại chess.js (khi nâng phiên bản)
+npm run bundle:chess # đóng gói lại chess.js
 ```
 
-Test chạy giao diện và bộ đọc thế cờ trong jsdom với HTML giả lập giống
-Chess.com, còn service worker chạy trong sandbox `vm` với `fetch` giả lập — nên
-không cần trình duyệt hay kết nối mạng.
+Test chạy giao diện, bộ đọc thế cờ và cổng fair play trong jsdom với HTML giả
+lập giống Chess.com; service worker và bộ phân tích UCI chạy trong sandbox `vm`
+— không cần trình duyệt hay mạng.
 
 ### Cấu trúc thư mục
 
 ```
-manifest.json                   khai báo tiện ích (MV3)
-src/content/position.js         đọc DOM Chess.com → FEN
-src/content/content.js          theo dõi bàn cờ, điều phối request
-src/content/ui.js               bảng thống kê + lớp phủ trên bàn cờ
-src/content/styles.css          toàn bộ CSS (tiền tố cmp-)
-src/background/service-worker.js  gọi API, cache, giới hạn tốc độ
-src/shared/settings.js          mô hình cấu hình dùng chung
-src/options/                    trang tùy chọn
-src/vendor/chess.bundle.js      chess.js đã đóng gói (BSD-2-Clause)
-tools/make-icons.js             sinh icon PNG
-tools/package.js                đóng gói .zip cho Chrome Web Store
-test/                           test chạy bằng node:test + jsdom
+manifest.json                     khai báo tiện ích (MV3)
+src/content/position.js           đọc DOM Chess.com → FEN
+src/content/context.js            cổng fair play: engine được phép chạy ở đâu
+src/content/content.js            theo dõi bàn cờ, điều phối hai chế độ
+src/content/ui.js                 bảng + lớp phủ trên bàn cờ
+src/content/styles.css            toàn bộ CSS (tiền tố cmp-)
+src/background/service-worker.js  API Lichess, cache, vòng đời offscreen
+src/offscreen/engine.{html,js}    chạy Stockfish, nói UCI
+src/shared/settings.js            mô hình cấu hình dùng chung
+src/shared/uci.js                 phân tích đầu ra UCI (thuần, dễ test)
+src/options/                      trang tùy chọn
+src/vendor/chess.bundle.js        chess.js đã đóng gói (BSD-2-Clause)
+src/vendor/stockfish/             Stockfish WASM (GPL-3.0)
+tools/                            sinh icon, đóng gói .zip
+test/                             test chạy bằng node:test + jsdom
 ```
 
 ### Khi Chess.com đổi giao diện
 
 Nếu bảng báo "Không tìm thấy bàn cờ", thường chỉ cần thêm selector mới vào
 `BOARD_SELECTORS` hoặc `MOVE_LIST_SELECTORS` ở đầu `src/content/position.js`.
-Phần còn lại không phụ thuộc vào HTML cụ thể.
+Nếu nút đầu hàng đổi tên, cập nhật `LIVE_CONTROL_SELECTORS` trong
+`src/content/context.js` — đó là thứ giữ cho engine không chạy trong ván đang
+đánh.
 
 ## Giấy phép
 
-MIT (xem [LICENSE](LICENSE)). Có kèm [chess.js](https://github.com/jhlywa/chess.js)
-theo giấy phép BSD-2-Clause — xem `src/vendor/LICENSE-chess.js.txt`.
+**GPL-3.0** (xem [LICENSE](LICENSE)) vì tiện ích đóng gói kèm Stockfish. Chi
+tiết các thành phần: [NOTICE.md](NOTICE.md).
 
 Dữ liệu khai cuộc thuộc về Lichess, dùng theo
-[điều khoản API của Lichess](https://lichess.org/api). Tiện ích này không có
-liên kết với Chess.com hay Lichess.
+[điều khoản API của Lichess](https://lichess.org/api). Tiện ích không có liên
+kết với Chess.com, Lichess hay nhóm phát triển Stockfish.

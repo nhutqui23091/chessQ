@@ -70,15 +70,17 @@
     title.appendChild(h('span', 'cmp-dot'));
     title.appendChild(h('span', null, '% nước đi'));
 
-    var dbSelect = h('select', 'cmp-db');
-    dbSelect.title = 'Nguồn dữ liệu';
-    [['lichess', 'Người chơi Lichess'], ['masters', 'Kiện tướng (OTB)']].forEach(function (pair) {
-      var option = h('option', null, pair[1]);
-      option.value = pair[0];
-      dbSelect.appendChild(option);
-    });
-    dbSelect.addEventListener('change', function () {
-      self.emit({ database: dbSelect.value });
+    var modes = h('div', 'cmp-modes');
+    [['explorer', 'Thống kê', 'Tần suất nước đi trong hàng triệu ván'],
+     ['engine', 'Máy', 'Điểm số Stockfish cho từng nước (chỉ trên bàn phân tích)']
+    ].forEach(function (entry) {
+      var button = h('button', 'cmp-mode', entry[1]);
+      button.dataset.mode = entry[0];
+      button.title = entry[2];
+      button.addEventListener('click', function () {
+        self.emit({ mode: entry[0] });
+      });
+      modes.appendChild(button);
     });
 
     var gear = h('button', 'cmp-icon-btn', '⚙');
@@ -100,7 +102,7 @@
     });
 
     head.appendChild(title);
-    head.appendChild(dbSelect);
+    head.appendChild(modes);
     head.appendChild(gear);
     head.appendChild(collapse);
     head.appendChild(close);
@@ -129,7 +131,7 @@
     this.panel = panel;
     this.els = {
       head: head,
-      dbSelect: dbSelect,
+      modes: modes,
       collapse: collapse,
       meta: meta,
       totals: totals,
@@ -144,7 +146,21 @@
     var self = this;
     var box = h('div', 'cmp-settings');
 
-    var speedRow = h('div', 'cmp-field');
+    var dbRow = h('div', 'cmp-field cmp-explorer-only');
+    dbRow.appendChild(h('div', 'cmp-field-label', 'Nguồn dữ liệu'));
+    var dbSelect = h('select', 'cmp-db');
+    [['lichess', 'Ván của người chơi Lichess'], ['masters', 'Ván của kiện tướng (OTB)']]
+      .forEach(function (pair) {
+        var option = h('option', null, pair[1]);
+        option.value = pair[0];
+        dbSelect.appendChild(option);
+      });
+    dbSelect.addEventListener('change', function () {
+      self.emit({ database: dbSelect.value });
+    });
+    dbRow.appendChild(dbSelect);
+
+    var speedRow = h('div', 'cmp-field cmp-explorer-only');
     speedRow.appendChild(h('div', 'cmp-field-label', 'Thể loại'));
     var speedChips = h('div', 'cmp-chips');
     root.CMPSettings.SPEED_OPTIONS.forEach(function (speed) {
@@ -162,7 +178,7 @@
     });
     speedRow.appendChild(speedChips);
 
-    var ratingRow = h('div', 'cmp-field');
+    var ratingRow = h('div', 'cmp-field cmp-explorer-only');
     ratingRow.appendChild(h('div', 'cmp-field-label', 'Mức Elo'));
     var ratingChips = h('div', 'cmp-chips');
     root.CMPSettings.RATING_OPTIONS.forEach(function (rating) {
@@ -180,6 +196,38 @@
     });
     ratingRow.appendChild(ratingChips);
 
+    var depthRow = h('div', 'cmp-field cmp-engine-only');
+    depthRow.appendChild(h('div', 'cmp-field-label', 'Độ sâu phân tích'));
+    var depthWrap = h('div', 'cmp-range');
+    var depthInput = h('input');
+    depthInput.type = 'range';
+    depthInput.min = '8';
+    depthInput.max = '22';
+    depthInput.step = '1';
+    var depthValue = h('span', 'cmp-range-value');
+    depthInput.addEventListener('input', function () {
+      depthValue.textContent = depthInput.value;
+    });
+    depthInput.addEventListener('change', function () {
+      self.emit({ engineDepth: Number(depthInput.value) });
+    });
+    depthWrap.appendChild(depthInput);
+    depthWrap.appendChild(depthValue);
+    depthRow.appendChild(depthWrap);
+
+    var linesRow = h('div', 'cmp-field cmp-engine-only');
+    linesRow.appendChild(h('div', 'cmp-field-label', 'Số nước gợi ý'));
+    var linesChips = h('div', 'cmp-chips');
+    [1, 2, 3, 4, 5, 6].forEach(function (count) {
+      var chip = h('button', 'cmp-chip', String(count));
+      chip.dataset.lines = String(count);
+      chip.addEventListener('click', function () {
+        self.emit({ engineLines: count });
+      });
+      linesChips.appendChild(chip);
+    });
+    linesRow.appendChild(linesChips);
+
     var badgeRow = h('label', 'cmp-field cmp-check');
     var badgeToggle = h('input');
     badgeToggle.type = 'checkbox';
@@ -189,16 +237,24 @@
     badgeRow.appendChild(badgeToggle);
     badgeRow.appendChild(h('span', null, 'Hiện % trên bàn cờ'));
 
+    box.appendChild(dbRow);
     box.appendChild(speedRow);
     box.appendChild(ratingRow);
+    box.appendChild(depthRow);
+    box.appendChild(linesRow);
     box.appendChild(badgeRow);
 
     this.settingsEls = {
       box: box,
+      dbRow: dbRow,
+      dbSelect: dbSelect,
       speedRow: speedRow,
       ratingRow: ratingRow,
       speedChips: speedChips,
       ratingChips: ratingChips,
+      depthInput: depthInput,
+      depthValue: depthValue,
+      linesChips: linesChips,
       badgeToggle: badgeToggle
     };
     return box;
@@ -301,9 +357,17 @@
     this.overlay.style.setProperty('--cmp-font', Math.max(9, Math.min(18, rect.width / 8 * 0.3)) + 'px');
   };
 
+  UI.prototype.engineState = function () {
+    return this.state.engine || { status: 'idle', moves: [] };
+  };
+
   UI.prototype.showBadges = function () {
-    return this.settings.enabled && this.settings.showBoardBadges &&
-      this.state.status === 'ready' && !!this.state.data && !!this.state.data.moves.length;
+    if (!this.settings.enabled || !this.settings.showBoardBadges) return false;
+    if (this.settings.mode === 'engine') {
+      var engine = this.engineState();
+      return (engine.status === 'thinking' || engine.status === 'ready') && !!engine.moves.length;
+    }
+    return this.state.status === 'ready' && !!this.state.data && !!this.state.data.moves.length;
   };
 
   /** Square -> percentage offsets inside the 8x8 overlay, honouring board flip. */
@@ -326,17 +390,53 @@
     // Make sure --cmp-square is up to date before the badges rely on it.
     this.positionOverlay();
 
-    moves.slice(0, this.settings.badgeCount).forEach(function (move) {
-      var offset = self.squareOffset(move.uci.slice(2, 4));
+    var engineMode = this.settings.mode === 'engine';
+    var shown = engineMode ? moves : moves.slice(0, this.settings.badgeCount);
+
+    // Several candidate moves can land on the same square (c3 and Nc3, Nbd2 and
+    // Nfd2). Group first so they can be spread out evenly instead of stacking
+    // on top of each other.
+    var bySquare = [];
+    var index = {};
+    shown.forEach(function (move) {
+      var square = move.uci.slice(2, 4);
+      if (index[square] === undefined) {
+        index[square] = bySquare.length;
+        bySquare.push({ square: square, moves: [] });
+      }
+      bySquare[index[square]].moves.push(move);
+    });
+
+    bySquare.forEach(function (group) {
+      var offset = self.squareOffset(group.square);
       if (!offset) return;
-      var badge = h('div', 'cmp-badge', formatPercent(move.share));
-      badge.dataset.uci = move.uci;
-      if (move.share >= 25) badge.classList.add('cmp-badge-top');
-      else if (move.share >= 8) badge.classList.add('cmp-badge-mid');
-      badge.style.left = 'calc(var(--cmp-square, 48px) * ' + offset.col + ')';
-      badge.style.top = 'calc(var(--cmp-square, 48px) * ' + offset.row + ')';
-      if (move.uci === self.hoveredUci) badge.classList.add('cmp-badge-hover');
-      self.overlay.appendChild(badge);
+      var count = group.moves.length;
+
+      group.moves.forEach(function (move, position) {
+        var badge = h('div', 'cmp-badge', engineMode ? formatEval(move) : formatPercent(move.share));
+        badge.dataset.uci = move.uci;
+        if (engineMode) {
+          badge.classList.add('cmp-badge-eval', lossClass(move));
+          badge.title = (move.san || move.uci) + ' — ' + formatEval(move);
+        } else if (move.share >= 25) {
+          badge.classList.add('cmp-badge-top');
+        } else if (move.share >= 8) {
+          badge.classList.add('cmp-badge-mid');
+        }
+
+        if (count > 1) {
+          badge.classList.add('cmp-badge-stacked');
+          // Spread the group around the square's centre line.
+          var shift = (position - (count - 1) / 2) * 52;
+          badge.style.transform = 'translateY(' + shift + '%)';
+          badge.textContent = (move.san || '') + ' ' + badge.textContent;
+        }
+
+        badge.style.left = 'calc(var(--cmp-square, 48px) * ' + offset.col + ')';
+        badge.style.top = 'calc(var(--cmp-square, 48px) * ' + offset.row + ')';
+        if (move.uci === self.hoveredUci) badge.classList.add('cmp-badge-hover');
+        self.overlay.appendChild(badge);
+      });
     });
   };
 
@@ -398,13 +498,24 @@
 
   UI.prototype.setSettings = function (settings) {
     this.settings = settings;
-    this.els.dbSelect.value = settings.database;
     this.els.collapse.textContent = settings.panelCollapsed ? '+' : '–';
     this.els.collapse.title = settings.panelCollapsed ? 'Mở rộng' : 'Thu gọn';
     this.panel.classList.toggle('cmp-collapsed', settings.panelCollapsed);
     this.panel.classList.toggle('cmp-masters', settings.database === 'masters');
 
+    var engineMode = settings.mode === 'engine';
+    this.panel.classList.toggle('cmp-engine-mode', engineMode);
+    Array.prototype.slice.call(this.els.modes.children).forEach(function (button) {
+      button.classList.toggle('cmp-mode-on', button.dataset.mode === settings.mode);
+    });
+
     var els = this.settingsEls;
+    els.dbSelect.value = settings.database;
+    els.depthInput.value = String(settings.engineDepth);
+    els.depthValue.textContent = String(settings.engineDepth);
+    Array.prototype.slice.call(els.linesChips.children).forEach(function (chip) {
+      chip.classList.toggle('cmp-chip-on', Number(chip.dataset.lines) === settings.engineLines);
+    });
     els.badgeToggle.checked = settings.showBoardBadges;
     Array.prototype.slice.call(els.speedChips.children).forEach(function (chip) {
       chip.classList.toggle('cmp-chip-on', settings.speeds.indexOf(chip.dataset.speed) !== -1);
@@ -414,8 +525,8 @@
     });
     // Speed and rating buckets only exist in the Lichess-players database.
     var otb = settings.database === 'masters';
-    els.speedRow.style.display = otb ? 'none' : '';
-    els.ratingRow.style.display = otb ? 'none' : '';
+    els.speedRow.style.display = otb || engineMode ? 'none' : '';
+    els.ratingRow.style.display = otb || engineMode ? 'none' : '';
 
     if (settings.panelPos) {
       this.panel.style.left = settings.panelPos.left + 'px';
@@ -433,6 +544,109 @@
   };
 
   UI.prototype.render = function () {
+    if (this.settings.mode === 'engine') this.renderEngine();
+    else this.renderExplorer();
+  };
+
+  /** Score text as a chess GUI writes it: +1.2, -0.4, M3 (mate in three). */
+  function formatEval(move) {
+    if (move.mate !== null && move.mate !== undefined) {
+      return (move.mate > 0 ? 'M' : '-M') + Math.abs(move.mate);
+    }
+    var pawns = (move.cp || 0) / 100;
+    var digits = Math.abs(pawns) >= 10 ? 0 : 1;
+    return (pawns > 0 ? '+' : '') + pawns.toFixed(digits);
+  }
+
+  /** How far behind the best move this is — what the badge colour encodes. */
+  function lossClass(move) {
+    if (move.best) return 'cmp-eval-best';
+    if (move.loss <= 30) return 'cmp-eval-good';
+    if (move.loss <= 90) return 'cmp-eval-ok';
+    if (move.loss <= 200) return 'cmp-eval-bad';
+    return 'cmp-eval-blunder';
+  }
+
+  UI.prototype.renderEngine = function () {
+    var self = this;
+    var els = this.els;
+    var engine = this.engineState();
+    var moves = engine.moves || [];
+
+    els.totals.textContent = '';
+    els.totals.style.display = 'none';
+    this.panel.classList.remove('cmp-boardless');
+
+    var statusText = '';
+    if (engine.status === 'blocked') {
+      statusText = engine.reason === 'game-in-progress'
+        ? 'Đang có ván diễn ra nên máy phân tích tắt — dùng engine trong ván đang đánh là gian lận và sẽ bị khóa tài khoản.'
+        : 'Máy phân tích chỉ chạy trên bàn phân tích. Mở chess.com/analysis (hoặc Game Review sau ván) để xem điểm số từng nước.';
+    } else if (engine.status === 'error') {
+      statusText = 'Lỗi máy phân tích: ' + (engine.error || 'không rõ');
+    } else if (engine.status === 'thinking' && !moves.length) {
+      statusText = 'Đang tính…';
+    } else if (this.state.status === 'no-board') {
+      statusText = 'Không tìm thấy bàn cờ trên trang này.';
+      this.panel.classList.add('cmp-boardless');
+    }
+    els.status.textContent = statusText;
+    els.status.style.display = statusText ? '' : 'none';
+
+    var metaParts = [];
+    if (this.state.position && moves.length) {
+      metaParts.push(this.state.position.turn === 'w' ? 'Trắng đi' : 'Đen đi');
+    }
+    if (moves.length) {
+      metaParts.push('độ sâu ' + engine.depth);
+      metaParts.push('điểm theo bên đang đi');
+    }
+    els.meta.textContent = metaParts.join(' · ');
+    els.meta.style.display = metaParts.length ? '' : 'none';
+
+    els.list.textContent = '';
+    if (moves.length) {
+      var header = h('div', 'cmp-row cmp-row-eng cmp-row-head');
+      header.appendChild(h('div', 'cmp-c-san', 'Nước'));
+      header.appendChild(h('div', 'cmp-c-eval', 'Điểm'));
+      header.appendChild(h('div', 'cmp-c-pv', 'Biến chính'));
+      els.list.appendChild(header);
+      moves.forEach(function (move, index) {
+        els.list.appendChild(self.buildEngineRow(move, index));
+      });
+    }
+
+    this.renderBadges(moves);
+    this.renderArrow();
+  };
+
+  UI.prototype.buildEngineRow = function (move, index) {
+    var self = this;
+    var row = h('div', 'cmp-row cmp-row-eng');
+    row.dataset.uci = move.uci;
+
+    var san = h('div', 'cmp-c-san', move.san || move.uci);
+    if (index === 0) san.classList.add('cmp-san-best');
+    row.appendChild(san);
+
+    var evalCell = h('div', 'cmp-c-eval');
+    var chip = h('span', 'cmp-eval ' + lossClass(move), formatEval(move));
+    if (!move.best) chip.title = 'Kém hơn nước tốt nhất ' + (move.loss / 100).toFixed(2);
+    evalCell.appendChild(chip);
+    row.appendChild(evalCell);
+
+    var pvMoves = move.pvSan || move.pv || [];
+    var pv = h('div', 'cmp-c-pv', pvMoves.slice(0, 6).join(' '));
+    pv.title = pvMoves.join(' ');
+    row.appendChild(pv);
+
+    row.addEventListener('mouseenter', function () {
+      self.setHovered(move.uci);
+    });
+    return row;
+  };
+
+  UI.prototype.renderExplorer = function () {
     var self = this;
     var els = this.els;
     var data = this.state.data;

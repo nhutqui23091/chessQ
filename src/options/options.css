@@ -71,6 +71,10 @@ input[type="number"] {
   font-weight: 600;
 }
 
+section.warn { border-color: #8a6d1f; background: #332c17; }
+section.warn p { margin: 0 0 8px; font-size: 13px; color: #e2d9bf; }
+section.warn p:last-child { margin-bottom: 0; }
+
 footer { display: flex; align-items: center; gap: 12px; }
 button {
   padding: 6px 12px;
@@ -90,4 +94,6 @@ button:hover { border-color: #7fa650; }
   h2, .lead, .row small, .chip { color: #6d6a66; }
   input[type="number"] { background: #fff; border-color: #dcdad5; color: #2b2a27; }
   button { background: #fff; border-color: #dcdad5; color: #2b2a27; }
+  section.warn { background: #fdf6e0; border-color: #e3cf92; }
+  section.warn p { color: #574312; }
 }
