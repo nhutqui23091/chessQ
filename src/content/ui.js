@@ -514,7 +514,10 @@
         badge.appendChild(chip);
         badge.dataset.uci = move.uci;
         if (engineMode) {
-          badge.classList.add('cmp-badge-eval', lossClass(move));
+          badge.classList.add('cmp-badge-eval');
+          scoreClasses(move).split(' ').forEach(function (name) {
+            badge.classList.add(name);
+          });
           badge.title = (move.san || move.uci) + ' — ' + scoreDetail(move);
         } else if (move.share >= 25) {
           badge.classList.add('cmp-badge-top');
@@ -694,18 +697,51 @@
   /** Both readings, for the hover title. */
   function scoreDetail(move) {
     if (move.mate !== null && move.mate !== undefined) {
-      return 'Chiếu hết sau ' + Math.abs(move.mate) + ' nước';
+      return move.mate > 0
+        ? 'Chiếu hết đối thủ sau ' + move.mate + ' nước'
+        : 'Bị chiếu hết sau ' + Math.abs(move.mate) + ' nước';
     }
     return 'Tỉ lệ thắng ' + Math.round(winPercent(move)) + '% · điểm ' + formatPawns(move);
   }
 
-  /** How far behind the best move this is — what the badge colour encodes. */
-  function lossClass(move) {
-    if (move.best) return 'cmp-eval-best';
-    if (move.loss <= 30) return 'cmp-eval-good';
-    if (move.loss <= 90) return 'cmp-eval-ok';
-    if (move.loss <= 200) return 'cmp-eval-bad';
-    return 'cmp-eval-blunder';
+  var QUALITY = ['cmp-eval-best', 'cmp-eval-good', 'cmp-eval-ok', 'cmp-eval-bad',
+    'cmp-eval-blunder'];
+
+  /** How far behind the best move this is. */
+  function lossRank(move) {
+    if (move.best) return 0;
+    if (move.loss <= 30) return 1;
+    if (move.loss <= 90) return 2;
+    if (move.loss <= 200) return 3;
+    return 4;
+  }
+
+  /** How good the move actually is, irrespective of the alternatives. */
+  function standingRank(move) {
+    if (move.mate !== null && move.mate !== undefined) return move.mate > 0 ? 0 : 4;
+    var win = winPercent(move);
+    if (win >= 55) return 0;
+    if (win >= 45) return 1;
+    if (win >= 32) return 2;
+    if (win >= 20) return 3;
+    return 4;
+  }
+
+  /**
+   * The colour of a score.
+   *
+   * Relative standing alone is misleading: in a position where every move
+   * loses, the least bad one came out bright green — the screenshot that
+   * prompted this showed "-M5" in the same green as a winning move. So the
+   * colour takes the worse of the two readings, and which move is *best* is
+   * marked separately, by a ring, so it stays visible either way.
+   */
+  function qualityClass(move) {
+    return QUALITY[Math.max(lossRank(move), standingRank(move))];
+  }
+
+  function scoreClasses(move) {
+    return qualityClass(move) + (move.best ? ' cmp-eval-top' : '');
   }
 
   UI.prototype.renderEngine = function () {
@@ -783,7 +819,7 @@
     row.appendChild(san);
 
     var evalCell = h('div', 'cmp-c-eval');
-    var chip = h('span', 'cmp-eval ' + lossClass(move), this.formatScore(move));
+    var chip = h('span', 'cmp-eval ' + scoreClasses(move), this.formatScore(move));
     chip.title = scoreDetail(move) +
       (move.best ? '' : ' · kém hơn nước tốt nhất ' + (move.loss / 100).toFixed(2));
     evalCell.appendChild(chip);

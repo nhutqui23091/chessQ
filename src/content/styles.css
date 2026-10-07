@@ -257,10 +257,10 @@
   font-variant-numeric: tabular-nums;
   color: #16200c;
 }
-.cmp-eval-best {
-  background: var(--cmp-best);
-  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.55);
-}
+.cmp-eval-best { background: var(--cmp-best); }
+/* Which move is best is marked by a ring, not by colour: in a lost position
+   every move is red and the ring is the only thing left saying "this one". */
+.cmp-eval-top { box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.75); }
 .cmp-eval-good { background: var(--cmp-good); }
 .cmp-eval-ok { background: var(--cmp-ok); }
 .cmp-eval-bad { background: var(--cmp-bad); }
@@ -449,11 +449,10 @@
   font-size: calc(var(--cmp-font, 13px) * 0.64);
 }
 
-.cmp-badge-eval.cmp-eval-best .cmp-badge-text {
-  background: var(--cmp-best);
+.cmp-badge-eval.cmp-eval-best .cmp-badge-text { background: var(--cmp-best); color: #16200c; }
+.cmp-badge-eval.cmp-eval-top .cmp-badge-text {
   border-color: #fff;
   border-width: 2px;
-  color: #16200c;
 }
 .cmp-badge-eval.cmp-eval-good .cmp-badge-text { background: var(--cmp-good); color: #16200c; }
 .cmp-badge-eval.cmp-eval-ok .cmp-badge-text { background: var(--cmp-ok); color: #231d05; }

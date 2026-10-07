@@ -444,3 +444,38 @@ test('a square layout wrapper alone never beats the inner board', () => {
   assert.strictEqual(
     window.CMPPosition.findSquareElement().getBoundingClientRect().width, 420);
 });
+
+test('a square sidebar full of text is never mistaken for the board', () => {
+  // The reported bug: badges drawn over the move list, because a square
+  // element in the right-hand column was picked by shape alone.
+  const moves = ['e4', 'e5', 'Nf3', 'Nc6', 'Bc4', 'Bc5', 'c3', 'Nf6', 'd4', 'exd4']
+    .map((san, i) => `<span class="a7Bq${i === 9 ? ' selected' : ''}">${san}</span>`).join('');
+  const window = makeWindow(`<!doctype html><html><body>
+    <div id="board-layout-chessboard"><div class="board" data-size="480">
+      <svg class="coordinates" viewBox="0 0 100 100" data-size="480">
+        <text x="0.75" y="3.5">8</text><text x="0.75" y="16">7</text>
+        <text x="0.75" y="28">6</text><text x="0.75" y="91">1</text>
+        <text x="10" y="99">a</text><text x="22" y="99">b</text>
+        <text x="35" y="99">c</text><text x="97" y="99">h</text>
+      </svg>
+    </div></div>
+    <div class="board-layout-sidebar" data-size="500">
+      <div class="moves-board-scroller" data-size="500">${moves}</div>
+    </div></body></html>`);
+
+  const board = window.CMPPosition.findBoard();
+  assert.ok(board, 'a board should be found');
+  assert.ok(board.closest('#board-layout-chessboard'),
+    'must be inside the board, not the sidebar');
+  assert.strictEqual(board.getBoundingClientRect().width, 480);
+});
+
+test('couldBeBoard rejects anything wordy or holding the move list', () => {
+  const window = makeWindow(`<!doctype html><html><body>
+    <div id="quiet" data-size="400"><svg><text>a</text><text>1</text></svg></div>
+    <div id="wordy" data-size="400">Giuoco Piano Game: Center Attack, Mason Gambit —
+      một khai cuộc cổ điển với rất nhiều chữ ở đây</div>
+  </body></html>`);
+  assert.strictEqual(window.CMPPosition.couldBeBoard(window.document.getElementById('quiet')), true);
+  assert.strictEqual(window.CMPPosition.couldBeBoard(window.document.getElementById('wordy')), false);
+});

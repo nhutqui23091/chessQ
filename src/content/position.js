@@ -19,7 +19,7 @@
 (function (root) {
   'use strict';
 
-  var VERSION = '1.8.0';
+  var VERSION = '1.8.1';
   var FILES = 'abcdefgh';
   var PIECE_RE = /(?:^|\s)(?:piece\s+)?([wb])([kqrbnp])(?:\s|$)/;
   var SQUARE_RE = /\bsquare-(\d)(\d)\b/;
@@ -190,6 +190,24 @@
   }
 
   /**
+   * Whether an element could be the board itself rather than something square
+   * that happens to sit near it.
+   *
+   * A chessboard holds almost no text — at most the sixteen coordinate labels.
+   * Sidebars, move lists and advert slots are square often enough to be picked
+   * by shape alone, and they are full of words. This is what keeps the badges
+   * off the move list.
+   */
+  function couldBeBoard(el) {
+    if (!el) return false;
+    var text = (el.textContent || '').replace(/\s+/g, '');
+    if (text.length > 40) return false;
+    var moveList = moveCache.container;
+    if (moveList && moveList.isConnected && el.contains(moveList)) return false;
+    return true;
+  }
+
+  /**
    * The layer holding the a–h / 1–8 labels Chess.com draws into the board.
    *
    * This is the most precise anchor available when the pieces are unreadable:
@@ -209,10 +227,12 @@
         else if (/^[1-8]$/.test(text)) ranks++;
       }
       if (files < 4 || ranks < 4) continue;
-      if (isSquarish(svgs[i].getBoundingClientRect())) return svgs[i];
+      if (isSquarish(svgs[i].getBoundingClientRect()) && couldBeBoard(svgs[i])) return svgs[i];
       // The labels can sit in a layer stretched over a non-square parent.
       var parent = svgs[i].parentElement;
-      if (parent && isSquarish(parent.getBoundingClientRect())) return parent;
+      if (parent && isSquarish(parent.getBoundingClientRect()) && couldBeBoard(parent)) {
+        return parent;
+      }
     }
     return null;
   }
@@ -229,6 +249,7 @@
     for (var i = 0; i < candidates.length; i++) {
       var rect = candidates[i].getBoundingClientRect();
       if (!isSquarish(rect)) continue;
+      if (!couldBeBoard(candidates[i])) continue;
       var area = rect.width * rect.height;
       if (area < bestArea) {
         best = candidates[i];
@@ -972,6 +993,7 @@
     flippedFromCoordinates: flippedFromCoordinates,
     findSquareElement: findSquareElement,
     findCoordinateBoard: findCoordinateBoard,
+    couldBeBoard: couldBeBoard,
     scanPieces: scanPieces,
     placementOf: placementOf,
     cleanSan: cleanSan,

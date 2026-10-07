@@ -44,6 +44,7 @@ theo trang — nhưng nó vẫn là trợ giúp ngoài, hãy tắt (Alt+P) khi �
 |---|---|
 | **Điểm trên bàn cờ** | Mỗi nước ứng viên có một nhãn ở **góc ô đích** (không che quân), màu từ xanh (tốt nhất) tới đỏ (sai lầm) |
 | **Tỉ lệ thắng** | Mặc định ghi điểm kiểu `62%` thay vì `+0.8`; đổi được trong ⚙ |
+| **Màu thật thà** | Thế cờ thua thì mọi nước đều đỏ; nước đáng chọn nhất được viền trắng |
 | **Nhiều nước cùng ô** | Hai nước cùng đích (c3 và Nc3) được tách ra và ghi rõ tên nước |
 | **Biến chính** | Mỗi nước kèm biến chính dạng SAN, rê chuột để thấy mũi tên trên bàn cờ |
 | **Thống kê thật** | Tần suất, thắng/hòa/bại, số ván, Elo trung bình cho từng nước |
@@ -137,7 +138,7 @@ nhập thành từ vị trí vua/xe, và ô bắt tốt qua đường chỉ khi 
 
 ```bash
 npm install          # chỉ cần cho test và script build
-npm test             # 131 test: đọc thế cờ, UCI, cổng fair play, API, giao diện, manifest
+npm test             # 137 test: đọc thế cờ, UCI, cổng fair play, API, giao diện, manifest
 npm i -D playwright  # chỉ cần cho test:e2e
 npm run test:e2e     # nạp tiện ích thật vào Chromium thật, chạy Stockfish thật
 npm run icons        # tạo lại icons/*.png
@@ -187,6 +188,9 @@ của Chess.com giữ nguyên**:
   `a`–`h` / `1`–`8` chính là vùng 8×8, dùng để đặt nhãn % cho khớp ô. Không có
   nó thì lấy phần tử vuông **nhỏ nhất** đủ lớn: bàn cờ nằm trong các khung
   layout cũng vuông nhưng to hơn nhiều, chọn cái to nhất là lệch hết.
+  Phần tử ứng viên còn phải **gần như không có chữ** (≤ 40 ký tự) và không
+  chứa danh sách nước đi — thanh bên và khung quảng cáo cũng hay vuông, và
+  chúng đầy chữ.
 * **Danh sách nước đi** — tìm theo selector, và nếu trượt thì **tìm theo nội
   dung**: quét các phần tử có chữ đọc được như một nước cờ, rồi chọn phần tử
   cha chứa cụm dày đặc nhất (tính điểm theo `số nước² / số phần tử con`, để một

@@ -230,3 +230,60 @@ test('the depth slider reports a new depth', (t) => {
   depth.dispatchEvent(new window.Event('change', { bubbles: true }));
   assert.deepEqual(changes[changes.length - 1], { engineDepth: 18 });
 });
+
+// --- colour must not call a lost position good -------------------------------
+
+test('every move red when you are the one getting mated', (t) => {
+  // The reported screenshot: -M5, -M4, -M3 all in the green of a winning move.
+  const losing = Object.assign({}, ENGINE, {
+    moves: [
+      { uci: 'f1f1', san: 'Rf1+', cp: null, mate: -5, loss: 0, best: true, pvSan: ['Rf1+'] },
+      { uci: 'e2e2', san: 'Re2+', cp: null, mate: -4, loss: 1, best: false, pvSan: ['Re2+'] },
+      { uci: 'h7h7', san: 'Rh7', cp: null, mate: -3, loss: 2, best: false, pvSan: ['Rh7'] }
+    ]
+  });
+  const { window } = setup(t, losing);
+  const chips = [...window.document.querySelectorAll('.cmp-row-eng:not(.cmp-row-head) .cmp-eval')];
+  chips.forEach((chip) => {
+    assert.ok(chip.classList.contains('cmp-eval-blunder'), chip.textContent);
+    assert.ok(!chip.classList.contains('cmp-eval-best'), chip.textContent);
+  });
+  // Surviving longest is still marked as the move to pick.
+  assert.ok(chips[0].classList.contains('cmp-eval-top'));
+  assert.ok(!chips[1].classList.contains('cmp-eval-top'));
+  assert.match(chips[0].title, /Bị chiếu hết sau 5/);
+});
+
+test('a mate you are delivering stays green', (t) => {
+  const winning = Object.assign({}, ENGINE, {
+    moves: [{ uci: 'd1h5', san: 'Qh5#', cp: null, mate: 1, loss: 0, best: true, pvSan: ['Qh5#'] }]
+  });
+  const { window } = setup(t, winning);
+  const chip = window.document.querySelector('.cmp-eval');
+  assert.ok(chip.classList.contains('cmp-eval-best'));
+  assert.ok(chip.classList.contains('cmp-eval-top'));
+  assert.match(chip.title, /Chiếu hết đối thủ/);
+});
+
+test('a dead-lost position is never shown in green', (t) => {
+  const hopeless = Object.assign({}, ENGINE, {
+    moves: [
+      { uci: 'a1a2', san: 'Ka2', cp: -900, mate: null, loss: 0, best: true, pvSan: ['Ka2'] },
+      { uci: 'a1b1', san: 'Kb1', cp: -950, mate: null, loss: 50, best: false, pvSan: ['Kb1'] }
+    ]
+  });
+  const { window } = setup(t, hopeless);
+  const chips = [...window.document.querySelectorAll('.cmp-row-eng:not(.cmp-row-head) .cmp-eval')];
+  chips.forEach((chip) => {
+    assert.ok(!chip.classList.contains('cmp-eval-best'), chip.textContent);
+    assert.ok(!chip.classList.contains('cmp-eval-good'), chip.textContent);
+  });
+  assert.ok(chips[0].classList.contains('cmp-eval-top'), 'still marks the best try');
+});
+
+test('the best move in a balanced position keeps its green', (t) => {
+  const { window } = setup(t, ENGINE);
+  const chip = window.document.querySelector('.cmp-eval');
+  assert.ok(chip.classList.contains('cmp-eval-best'));
+  assert.ok(chip.classList.contains('cmp-eval-top'));
+});
