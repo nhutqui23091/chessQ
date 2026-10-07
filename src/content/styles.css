@@ -1,0 +1,331 @@
+/*
+ * Everything is prefixed with `cmp-` and scoped under .cmp-panel / .cmp-overlay
+ * so nothing here can leak into Chess.com's own styles. Values are set with
+ * high specificity because chess.com ships broad resets.
+ */
+
+.cmp-panel {
+  --cmp-bg: #262421;
+  --cmp-bg-soft: #2f2d2a;
+  --cmp-line: #3d3a35;
+  --cmp-text: #e8e6e3;
+  --cmp-muted: #9b9793;
+  --cmp-green: #7fa650;
+  --cmp-accent: #f0c541;
+  --cmp-drawer: rgba(0, 0, 0, 0.18);
+
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 2147483000;
+  width: 352px;
+  max-width: calc(100vw - 24px);
+  box-sizing: border-box;
+  border: 1px solid var(--cmp-line);
+  border-radius: 10px;
+  background: var(--cmp-bg);
+  color: var(--cmp-text);
+  font: 13px/1.35 "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+
+.cmp-panel.cmp-hidden,
+.cmp-panel.cmp-boardless { display: none; }
+.cmp-panel.cmp-dragging { opacity: 0.92; }
+.cmp-panel * { box-sizing: border-box; }
+
+.cmp-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 8px;
+  background: var(--cmp-bg-soft);
+  border-bottom: 1px solid var(--cmp-line);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.cmp-panel.cmp-dragging .cmp-head { cursor: grabbing; }
+
+.cmp-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cmp-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--cmp-green);
+  flex: 0 0 auto;
+}
+.cmp-panel.cmp-masters .cmp-dot { background: var(--cmp-accent); }
+
+.cmp-db {
+  flex: 0 0 auto;
+  max-width: 132px;
+  padding: 2px 4px;
+  border: 1px solid var(--cmp-line);
+  border-radius: 5px;
+  background: var(--cmp-bg);
+  color: var(--cmp-text);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.cmp-icon-btn {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--cmp-muted);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+.cmp-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--cmp-text);
+}
+
+.cmp-body { padding: 8px; }
+.cmp-panel.cmp-collapsed .cmp-body { display: none; }
+
+.cmp-meta {
+  margin-bottom: 6px;
+  color: var(--cmp-muted);
+  font-size: 11.5px;
+}
+
+.cmp-totals {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.cmp-total-count {
+  flex: 0 0 auto;
+  color: var(--cmp-muted);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+.cmp-totals .cmp-wdl { flex: 1 1 auto; }
+
+/* --- settings drawer --- */
+.cmp-settings { display: none; }
+.cmp-panel.cmp-settings-open .cmp-settings {
+  display: block;
+  margin-bottom: 8px;
+  padding: 8px;
+  border: 1px solid var(--cmp-line);
+  border-radius: 7px;
+  background: var(--cmp-drawer);
+}
+.cmp-field + .cmp-field { margin-top: 7px; }
+.cmp-field-label {
+  margin-bottom: 4px;
+  color: var(--cmp-muted);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.cmp-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.cmp-chip {
+  padding: 2px 7px;
+  border: 1px solid var(--cmp-line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--cmp-muted);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.cmp-chip:hover { border-color: var(--cmp-green); }
+.cmp-chip-on {
+  background: var(--cmp-green);
+  border-color: var(--cmp-green);
+  color: #16200c;
+  font-weight: 600;
+}
+.cmp-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.cmp-check input { margin: 0; accent-color: var(--cmp-green); }
+
+/* --- move rows --- */
+.cmp-moves { display: block; }
+.cmp-row {
+  display: grid;
+  grid-template-columns: 44px 1fr 92px 42px;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 4px;
+  border-radius: 5px;
+}
+.cmp-row-head {
+  color: var(--cmp-muted);
+  font-size: 9.5px;
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--cmp-line);
+  padding-bottom: 4px;
+  margin-bottom: 3px;
+}
+.cmp-row-head .cmp-c-wdl { text-align: center; }
+.cmp-row:not(.cmp-row-head):hover,
+.cmp-row.cmp-row-hover { background: rgba(255, 255, 255, 0.07); }
+
+.cmp-c-san {
+  font-weight: 600;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.cmp-c-share { display: flex; align-items: center; gap: 6px; }
+.cmp-share-bar {
+  position: relative;
+  flex: 1 1 auto;
+  height: 7px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.09);
+  overflow: hidden;
+}
+.cmp-share-fill {
+  height: 100%;
+  border-radius: 4px;
+  background: var(--cmp-green);
+}
+.cmp-share-text {
+  flex: 0 0 auto;
+  min-width: 38px;
+  text-align: right;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+.cmp-c-games {
+  text-align: right;
+  color: var(--cmp-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.cmp-wdl {
+  display: flex;
+  height: 13px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--cmp-bg-soft);
+}
+.cmp-wdl-seg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  font-size: 9px;
+  line-height: 1;
+  white-space: nowrap;
+}
+.cmp-wdl-w { background: #f3f3f2; color: #2b2a27; }
+.cmp-wdl-d { background: #8a8785; color: #16150f; }
+.cmp-wdl-b { background: #403d39; color: #e8e6e3; }
+
+.cmp-status {
+  margin-top: 6px;
+  color: var(--cmp-muted);
+  font-size: 11.5px;
+}
+
+/* --- board overlay --- */
+.cmp-overlay {
+  position: fixed;
+  display: none;
+  z-index: 2147482900;
+  pointer-events: none;
+}
+.cmp-arrows {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.cmp-arrow-line {
+  stroke: #f0c541;
+  stroke-width: 1.6;
+  stroke-opacity: 0.85;
+  stroke-linecap: round;
+}
+.cmp-arrow-head {
+  fill: #f0c541;
+  fill-opacity: 0.9;
+}
+
+.cmp-badge {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--cmp-square, 48px);
+  height: var(--cmp-square, 48px);
+  font: 600 var(--cmp-font, 13px)/1 "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: #fff;
+  pointer-events: none;
+}
+.cmp-badge::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 78%;
+  height: 78%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: rgba(23, 22, 20, 0.62);
+  border: 1.5px solid rgba(255, 255, 255, 0.22);
+}
+.cmp-badge > * { position: relative; }
+.cmp-badge-mid::before { background: rgba(63, 90, 32, 0.74); }
+.cmp-badge-top::before {
+  background: rgba(127, 166, 80, 0.86);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+.cmp-badge-hover::before {
+  background: rgba(240, 197, 65, 0.9);
+  border-color: #fff;
+}
+.cmp-badge-hover { color: #221d06; }
+
+@media (prefers-color-scheme: light) {
+  .cmp-panel {
+    --cmp-bg: #ffffff;
+    --cmp-bg-soft: #f3f3f1;
+    --cmp-line: #dcdad5;
+    --cmp-text: #2b2a27;
+    --cmp-muted: #6d6a66;
+    --cmp-drawer: rgba(0, 0, 0, 0.035);
+  }
+  .cmp-wdl { background: #e7e5e1; }
+  .cmp-wdl-w { background: #fbfbfa; color: #2b2a27; box-shadow: inset 0 0 0 1px #dcdad5; }
+  .cmp-wdl-d { background: #a7a4a0; color: #fff; }
+  .cmp-wdl-b { background: #45423e; color: #fff; }
+  .cmp-share-bar { background: rgba(0, 0, 0, 0.08); }
+  .cmp-row:not(.cmp-row-head):hover,
+  .cmp-row.cmp-row-hover { background: rgba(0, 0, 0, 0.05); }
+  .cmp-icon-btn:hover { background: rgba(0, 0, 0, 0.07); }
+}

@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <title>Chess Move % — Tùy chọn</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <main>
+    <h1>Chess Move %</h1>
+    <p class="lead">
+      Hiện tần suất (%) và tỉ lệ thắng/hòa/thua của từng nước đi cho thế cờ đang
+      mở trên Chess.com. Dữ liệu lấy từ
+      <a href="https://lichess.org/analysis" target="_blank" rel="noreferrer">Lichess opening explorer</a>.
+    </p>
+
+    <section>
+      <label class="row check">
+        <input type="checkbox" id="enabled">
+        <span><strong>Bật tiện ích</strong><small>Tắt để tiện ích không chạy trên Chess.com.</small></span>
+      </label>
+    </section>
+
+    <section>
+      <h2>Nguồn dữ liệu</h2>
+      <label class="row check">
+        <input type="radio" name="database" value="lichess">
+        <span>Ván của người chơi Lichess<small>Có thể lọc theo thể loại và mức Elo.</small></span>
+      </label>
+      <label class="row check">
+        <input type="radio" name="database" value="masters">
+        <span>Ván của kiện tướng (OTB, 2200+)<small>Cơ sở dữ liệu cờ bàn, không lọc Elo/thể loại.</small></span>
+      </label>
+    </section>
+
+    <section id="lichess-filters">
+      <h2>Thể loại</h2>
+      <div class="chips" id="speeds"></div>
+      <h2>Mức Elo</h2>
+      <div class="chips" id="ratings"></div>
+    </section>
+
+    <section>
+      <h2>Hiển thị</h2>
+      <label class="row check">
+        <input type="checkbox" id="showPanel">
+        <span>Hiện bảng thống kê<small>Phím tắt Alt+P, hoặc bấm vào biểu tượng tiện ích.</small></span>
+      </label>
+      <label class="row check">
+        <input type="checkbox" id="showBoardBadges">
+        <span>Hiện % ngay trên bàn cờ</span>
+      </label>
+      <label class="row">
+        <span>Số nước hiện trên bàn cờ</span>
+        <input type="number" id="badgeCount" min="1" max="10" step="1">
+      </label>
+      <label class="row">
+        <span>Bỏ qua nước đi dưới (%)</span>
+        <input type="number" id="minPercent" min="0" max="25" step="0.1">
+      </label>
+    </section>
+
+    <footer>
+      <button id="reset" type="button">Đặt lại mặc định</button>
+      <span id="saved" class="saved" hidden>Đã lưu</span>
+    </footer>
+  </main>
+  <script src="../shared/settings.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>

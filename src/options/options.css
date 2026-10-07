@@ -1,0 +1,93 @@
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 24px;
+  background: #262421;
+  color: #e8e6e3;
+  font: 14px/1.45 "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+main { max-width: 560px; margin: 0 auto; }
+
+h1 { margin: 0 0 4px; font-size: 20px; }
+h2 {
+  margin: 18px 0 8px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #9b9793;
+}
+.lead { margin: 0 0 18px; color: #9b9793; font-size: 13px; }
+a { color: #7fa650; }
+
+section {
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  border: 1px solid #3d3a35;
+  border-radius: 10px;
+  background: #2f2d2a;
+}
+section h2:first-child { margin-top: 0; }
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 0;
+}
+.row.check { justify-content: flex-start; align-items: flex-start; cursor: pointer; }
+.row.check input { margin: 3px 0 0; accent-color: #7fa650; }
+.row span { display: block; }
+.row small { display: block; color: #9b9793; font-size: 12px; }
+
+input[type="number"] {
+  width: 84px;
+  padding: 4px 6px;
+  border: 1px solid #3d3a35;
+  border-radius: 6px;
+  background: #262421;
+  color: #e8e6e3;
+  font: inherit;
+}
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  padding: 4px 10px;
+  border: 1px solid #3d3a35;
+  border-radius: 999px;
+  background: transparent;
+  color: #9b9793;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.chip:hover { border-color: #7fa650; }
+.chip[aria-pressed="true"] {
+  background: #7fa650;
+  border-color: #7fa650;
+  color: #16200c;
+  font-weight: 600;
+}
+
+footer { display: flex; align-items: center; gap: 12px; }
+button {
+  padding: 6px 12px;
+  border: 1px solid #3d3a35;
+  border-radius: 7px;
+  background: #2f2d2a;
+  color: #e8e6e3;
+  font: inherit;
+  cursor: pointer;
+}
+button:hover { border-color: #7fa650; }
+.saved { color: #7fa650; font-size: 12px; }
+
+@media (prefers-color-scheme: light) {
+  body { background: #f3f3f1; color: #2b2a27; }
+  section { background: #fff; border-color: #dcdad5; }
+  h2, .lead, .row small, .chip { color: #6d6a66; }
+  input[type="number"] { background: #fff; border-color: #dcdad5; color: #2b2a27; }
+  button { background: #fff; border-color: #dcdad5; color: #2b2a27; }
+}
