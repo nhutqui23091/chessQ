@@ -38,9 +38,10 @@
   </div></div>
   <div class="side">
     <div class="gjQxHO"><div class="pLmNo" id="moves"></div></div>
-    <div class="live-game-buttons-component">
+    <div class="live-game-buttons-component" id="live-controls">
       <button data-cy="resign-button">Đầu hàng</button>
     </div>
+    <div id="result-area"></div>
     <div class="chat-area">Đối thủ nói: nước Nf3 hay đấy</div>
   </div>
 </div>
@@ -74,4 +75,13 @@ setMoves([
   { text: 'xd4', piece: 1 }, { text: 'c6', piece: 1 },
   { text: 'xc6', piece: 1 }, { text: 'bxc6' }
 ]);
+
+// Ends the game the way the page does: the live controls go, a result appears.
+window.endGame = function () {
+  document.getElementById('live-controls').remove();
+  var over = document.createElement('div');
+  over.className = 'game-over-modal-content';
+  over.textContent = 'Trắng thắng';
+  document.getElementById('result-area').appendChild(over);
+};
 </script></body></html>

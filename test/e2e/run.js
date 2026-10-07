@@ -59,7 +59,7 @@ function serveFixture() {
       res.end(classic);
       return;
     }
-    if (url === '/play/computer/opaque') {
+    if (url === '/play/computer/opaque' || url === '/play/online/opaque') {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end(opaque);
       return;
@@ -188,19 +188,30 @@ async function main() {
     await opaque.close();
     void started;
 
-    // And must refuse where the opponent could be a person.
+    // A game against a person: nothing while it runs, everything once it ends.
     const human = await context.newPage();
-    await human.goto(`http://127.0.0.1:${PORT}/play/online`);
+    await human.goto(`http://127.0.0.1:${PORT}/play/online/opaque`);
     await wait(2500);
-    const refused = await human.evaluate(() => {
+    const duringGame = await human.evaluate(() => {
       const status = document.querySelector('.cmp-status');
       return {
         text: status ? status.textContent : '',
         rows: document.querySelectorAll('.cmp-row-eng:not(.cmp-row-head)').length
       };
     });
-    check('the engine refuses in a game against a person',
-      refused.rows === 0 && /người thật/.test(refused.text), refused.text.slice(0, 60));
+    check('the engine refuses while a game against a person is running',
+      duringGame.rows === 0 && /Ván đang diễn ra/.test(duringGame.text),
+      duringGame.text.slice(0, 70));
+
+    await human.evaluate(() => window.endGame());
+    const afterGame = await waitFor(human, () => {
+      const rows = document.querySelectorAll('.cmp-row-eng:not(.cmp-row-head)');
+      return rows.length >= 4
+        ? { rows: rows.length, first: rows[0].querySelector('.cmp-c-san').textContent }
+        : null;
+    }, 30000);
+    check('and analyses that same game the moment it ends',
+      !!afterGame, afterGame ? `${afterGame.rows} nước, tốt nhất ${afterGame.first}` : 'no rows');
   } finally {
     await context.close();
     server.close();

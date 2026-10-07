@@ -720,9 +720,13 @@
 
     var statusText = '';
     if (engine.status === 'blocked') {
-      statusText = engine.reason === 'game-in-progress'
-        ? 'Trang này đang có ván diễn ra nên máy phân tích tắt — dùng engine khi đấu với người thật là gian lận và sẽ bị khóa tài khoản.'
-        : 'Máy phân tích chạy khi bạn luyện với máy (chess.com/play/computer) và trên bàn phân tích (chess.com/analysis, gồm Game Review). Trong ván với người thật thì không.';
+      if (engine.reason === 'game-in-progress') {
+        statusText = 'Ván đang diễn ra nên máy phân tích tắt. ' +
+          'Ngay khi ván kết thúc nó sẽ tự bật và chấm điểm từng nước, ngay trên trang này.';
+      } else {
+        statusText = 'Máy phân tích chạy khi bạn luyện với máy, trên bàn phân tích, ' +
+          'và ở mọi ván đã kết thúc. Trong ván với người đang đánh thì không.';
+      }
     } else if (engine.status === 'error') {
       statusText = 'Lỗi máy phân tích: ' + (engine.error || 'không rõ');
     } else if (engine.status === 'thinking' && !moves.length) {
@@ -744,6 +748,7 @@
       els.meta.appendChild(h('span', 'cmp-meta-depth', 'độ sâu ' + engine.depth));
       var detail = ['Điểm tính theo bên đang đi: số càng lớn càng tốt cho ' + turn.toLowerCase()];
       if (engine.context === 'computer') detail.push('Ván luyện với máy');
+      if (engine.context === 'finished') detail.push('Ván đã kết thúc — xem lại từng nước');
       if (this.state.position && this.state.position.source === 'move-list-only') {
         detail.push('Thế cờ đọc từ danh sách nước đi (bàn cờ vẽ bằng canvas nên không đọc được)');
         els.meta.appendChild(h('span', 'cmp-meta-tag', 'từ danh sách nước'));

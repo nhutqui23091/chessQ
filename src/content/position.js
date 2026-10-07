@@ -19,7 +19,7 @@
 (function (root) {
   'use strict';
 
-  var VERSION = '1.7.0';
+  var VERSION = '1.8.0';
   var FILES = 'abcdefgh';
   var PIECE_RE = /(?:^|\s)(?:piece\s+)?([wb])([kqrbnp])(?:\s|$)/;
   var SQUARE_RE = /\bsquare-(\d)(\d)\b/;
@@ -954,8 +954,16 @@
     };
   }
 
+  /** The move list found most recently, for callers that need to read it. */
+  function moveListElement() {
+    return moveCache.container && moveCache.container.isConnected
+      ? moveCache.container
+      : null;
+  }
+
   root.CMPPosition = {
     readPosition: readPosition,
+    moveListElement: moveListElement,
     findBoard: findBoard,
     diagnose: diagnose,
     describe: describe,

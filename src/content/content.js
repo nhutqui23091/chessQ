@@ -182,6 +182,13 @@
       // tracking the right element after a re-render.
       if (ui.state.position) ui.state.position.board = position.board;
       if (ui.state.position) ui.state.position.flipped = position.flipped;
+      // A block depends on the page, not on the position. A game ending does
+      // not move a piece, so without this the engine would stay off until the
+      // next move — on a finished game, forever.
+      if (settings.mode === 'engine' && engineState.status === 'blocked' &&
+          root.CMPContext.engineStatus().allowed) {
+        requestEngine(position);
+      }
       return;
     }
     currentFen = position.fen;

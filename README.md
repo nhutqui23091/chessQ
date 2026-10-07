@@ -20,12 +20,20 @@ Ranh giới là **ai ngồi bên kia bàn cờ**.
 |---|---|---|
 | `chess.com/play/computer` | ✅ chạy trực tiếp trong ván | Đối thủ là bot: không ai bị thiệt, elo không đổi. Chess.com cũng tự cho gợi ý ở đây. |
 | `chess.com/analysis` (gồm Game Review) | ✅ | Ôn khai cuộc, mổ lại ván đã đấu. |
-| `/play/online`, `/game/live/…`, `/game/daily/…` | ❌ | Đối thủ là **người thật**. |
+| Ván với người **đã kết thúc** | ✅ tự bật ngay tại chỗ | Ván xong rồi thì không còn ai bị thiệt. |
+| Ván với người **đang đánh** | ❌ | Đối thủ là người thật đang chơi ván công bằng của họ. |
 
-Trong ván với người thật, engine không chạy — không có cài đặt nào bật được, và
-trên bàn phân tích nó cũng tự tắt nếu trang vẫn còn nút đầu hàng của một ván
-đang diễn ra. Dùng engine khi đấu với người là gian lận theo luật Chess.com:
-đối thủ mất ván công bằng, còn bạn mất tài khoản.
+Ván với người: trong lúc đang đánh thì engine tắt, và **ngay khi ván kết thúc nó
+tự bật**, chấm điểm từng nước ngay trên trang đó — không cần mở Game Review.
+
+Để bật, tiện ích cần **dấu hiệu rõ ràng là ván đã xong**: kết quả (`1-0`, `0-1`,
+`½-½`), bảng kết thúc ván, hay nút đấu lại — chứ không chỉ dựa vào việc "không
+thấy nút đầu hàng". Chess.com đổi tên class thường xuyên; nếu nút đầu hàng
+ngừng khớp selector thì "không thấy nút đầu hàng" sẽ âm thầm bị hiểu thành "ván
+đã xong" ngay giữa ván của ai đó.
+
+Không có cài đặt nào bật engine trong ván đang đánh với người. Đó là gian lận
+theo luật Chess.com: đối thủ mất ván công bằng, còn bạn mất tài khoản.
 
 Thống kê khai cuộc là *sách khai cuộc* chứ không phải engine, nên không bị chặn
 theo trang — nhưng nó vẫn là trợ giúp ngoài, hãy tắt (Alt+P) khi đấu với người.
@@ -41,6 +49,7 @@ theo trang — nhưng nó vẫn là trợ giúp ngoài, hãy tắt (Alt+P) khi �
 | **Thống kê thật** | Tần suất, thắng/hòa/bại, số ván, Elo trung bình cho từng nước |
 | **Tên khai cuộc** | Mã ECO + tên khai cuộc của thế cờ hiện tại |
 | **Luyện với bot** | Điểm số cập nhật theo từng nước ngay trong ván với máy |
+| **Mổ ván vừa đánh** | Ván với người vừa kết thúc là engine tự bật ngay tại trang đó |
 | **Theo dõi mọi chế độ** | Ván trực tiếp, phân tích, xem lại ván, puzzle, bàn cờ lật ngược |
 | **Bộ lọc** | Thể loại, mức Elo, độ sâu máy, số nước gợi ý |
 
@@ -128,7 +137,7 @@ nhập thành từ vị trí vua/xe, và ô bắt tốt qua đường chỉ khi 
 
 ```bash
 npm install          # chỉ cần cho test và script build
-npm test             # 124 test: đọc thế cờ, UCI, cổng fair play, API, giao diện, manifest
+npm test             # 131 test: đọc thế cờ, UCI, cổng fair play, API, giao diện, manifest
 npm i -D playwright  # chỉ cần cho test:e2e
 npm run test:e2e     # nạp tiện ích thật vào Chromium thật, chạy Stockfish thật
 npm run icons        # tạo lại icons/*.png

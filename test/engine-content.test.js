@@ -42,11 +42,19 @@ test('analyses live while practising against a bot', async (t) => {
   assert.strictEqual(window.document.querySelector('.cmp-status').textContent, 'Đang tính…');
 });
 
-test('never asks the engine in a game against a person', async (t) => {
+test('never asks the engine while a game against a person is running', async (t) => {
   const { window, sent } = boot(t, 'https://www.chess.com/play/online', boardHtml(ITALIAN));
   await wait(450);
   assert.strictEqual(sent.filter((m) => m.type === 'analyze').length, 0);
-  assert.match(window.document.querySelector('.cmp-status').textContent, /người thật/);
+  assert.match(window.document.querySelector('.cmp-status').textContent, /Ván đang diễn ra/);
+});
+
+test('analyses that same game the moment it is over', async (t) => {
+  const { window, sent } = boot(t, 'https://www.chess.com/play/online',
+    boardHtml(ITALIAN) + '<div class="game-over-modal-content">Bạn thắng</div>');
+  await wait(450);
+  assert.strictEqual(sent.filter((m) => m.type === 'analyze').length, 1);
+  assert.strictEqual(window.document.querySelector('.cmp-status').textContent, 'Đang tính…');
 });
 
 test('refuses even on /analysis while a game is still running', async (t) => {
@@ -54,7 +62,7 @@ test('refuses even on /analysis while a game is still running', async (t) => {
     boardHtml(ITALIAN) + '<button data-cy="resign-button">Resign</button>');
   await wait(450);
   assert.strictEqual(sent.filter((m) => m.type === 'analyze').length, 0);
-  assert.match(window.document.querySelector('.cmp-status').textContent, /ván diễn ra/);
+  assert.match(window.document.querySelector('.cmp-status').textContent, /Ván đang diễn ra/);
 });
 
 test('renders streamed engine results and converts them to SAN', async (t) => {
@@ -119,4 +127,26 @@ test('a deeper setting re-runs the analysis', async (t) => {
   const analyze = sent.filter((m) => m.type === 'analyze');
   assert.strictEqual(analyze.length, 2);
   assert.strictEqual(analyze[1].depth, 20);
+});
+
+test('the engine switches itself on when the game ends, with no move played', async (t) => {
+  // A game ending moves no piece, so nothing about the position changes. The
+  // engine has to notice the page changed instead.
+  const { window, sent } = boot(t, 'https://www.chess.com/play/online',
+    boardHtml(ITALIAN) + '<button data-cy="resign-button">Đầu hàng</button>');
+  await wait(450);
+  assert.strictEqual(sent.filter((m) => m.type === 'analyze').length, 0);
+  assert.match(window.document.querySelector('.cmp-status').textContent, /Ván đang diễn ra/);
+
+  // The game ends: controls go, a result appears.
+  window.document.querySelector('[data-cy="resign-button"]').remove();
+  const over = window.document.createElement('div');
+  over.className = 'game-over-modal-content';
+  over.textContent = 'Trắng thắng';
+  window.document.body.appendChild(over);
+  await wait(1200);
+
+  const analyze = sent.filter((m) => m.type === 'analyze');
+  assert.strictEqual(analyze.length, 1, 'should analyse the finished game');
+  assert.strictEqual(analyze[0].fen.split(' ')[0], ITALIAN.split(' ')[0]);
 });

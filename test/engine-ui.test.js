@@ -146,18 +146,18 @@ test('shows mate scores instead of a number', (t) => {
 test('explains where the engine does run when it is off', (t) => {
   const { window } = setup(t, { status: 'blocked', reason: 'not-allowed', moves: [], depth: 0 });
   const text = window.document.querySelector('.cmp-status').textContent;
-  assert.match(text, /play\/computer/);
-  assert.match(text, /người thật/);
+  assert.match(text, /luyện với máy/);
+  assert.match(text, /đã kết thúc/);
   assert.strictEqual(window.document.querySelectorAll('.cmp-badge').length, 0);
   assert.strictEqual(window.document.querySelectorAll('.cmp-row-eng').length, 0);
 });
 
-test('says plainly why it refuses during a game in progress', (t) => {
+test('says what it is waiting for during a game in progress', (t) => {
   const { window } = setup(t, { status: 'blocked', reason: 'game-in-progress', moves: [], depth: 0 });
   const text = window.document.querySelector('.cmp-status').textContent;
-  assert.match(text, /ván diễn ra/);
-  assert.match(text, /gian lận/);
-  assert.match(text, /người thật/);
+  assert.match(text, /Ván đang diễn ra/);
+  // It tells the user it will come on by itself, so waiting is the whole ask.
+  assert.match(text, /khi ván kết thúc/);
 });
 
 test('shows partial results while the engine is still searching', (t) => {
