@@ -54,7 +54,8 @@ function loadEngineHost() {
   return {
     sent,
     posted,
-    deliver: (message) => listeners.forEach((fn) => fn(message)),
+    deliver: (message, respond) =>
+      listeners.forEach((fn) => fn(message, {}, respond || (() => {}))),
     worker: () => workerHandle,
     say: (line) => workerHandle.onmessage({ data: line })
   };
@@ -171,4 +172,146 @@ test('a vanished offscreen document is noticed and rebuilt', async (t) => {
   sandbox.markEngineReady();
   await second;
   assert.strictEqual(sandbox.__offscreen.length, 1, 'should have made a new one');
+});
+
+// --- requests arriving while the engine is still booting ---------------------
+// Chess.com redraws its board several times right after load, so this is the
+// ordinary case. Mishandling it is what left the panel on "Đang tính…".
+
+const FEN_A = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1';
+const FEN_B = 'rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2';
+
+function analyze(host, id, fen) {
+  host.deliver({
+    target: 'offscreen', type: 'engine-analyze',
+    id: id, tabId: 5, fen: fen, depth: 14, lines: 4
+  });
+}
+
+test('three requests during boot produce one search, for the newest position', () => {
+  const host = loadEngineHost();
+  analyze(host, 1, ITALIAN);
+  analyze(host, 2, FEN_A);
+  analyze(host, 3, FEN_B);
+
+  // Nothing may be sent to Stockfish before it says it is ready.
+  assert.ok(!host.posted.some((c) => c.startsWith('go')), host.posted.join(' | '));
+
+  host.say('uciok');
+  host.say('readyok');
+
+  const searches = host.posted.filter((c) => c.startsWith('position fen '));
+  assert.strictEqual(searches.length, 1, host.posted.join(' | '));
+  assert.strictEqual(searches[0], 'position fen ' + FEN_B);
+  assert.strictEqual(host.posted.filter((c) => c.startsWith('go ')).length, 1);
+});
+
+test('the superseded requests are failed, not left waiting', () => {
+  const host = loadEngineHost();
+  analyze(host, 1, ITALIAN);
+  analyze(host, 2, FEN_A);
+  analyze(host, 3, FEN_B);
+
+  const abandoned = host.sent.filter((m) => m.status === 'error').map((m) => m.id);
+  assert.deepStrictEqual([...abandoned], [1, 2], 'each must be told, or its tab waits forever');
+});
+
+test('the result goes to the request that actually ran', () => {
+  const host = loadEngineHost();
+  analyze(host, 1, ITALIAN);
+  analyze(host, 2, FEN_B);
+  host.say('uciok');
+  host.say('readyok');
+  host.say('info depth 14 multipv 1 score cp 20 nodes 50 pv g1f3 b8c6');
+  host.say('bestmove g1f3');
+
+  const done = host.sent.find((m) => m.status === 'done');
+  assert.strictEqual(done.id, 2);
+  assert.strictEqual(done.fen, FEN_B, 'never another position than the one searched');
+});
+
+test('a new position mid-search stops the old one and starts the new', () => {
+  const host = loadEngineHost();
+  host.say('uciok');
+  host.say('readyok');
+  analyze(host, 1, ITALIAN);
+  assert.strictEqual(host.posted.filter((c) => c.startsWith('go ')).length, 1);
+
+  analyze(host, 2, FEN_B);
+  assert.ok(host.posted.includes('stop'), 'must stop before starting another');
+  assert.strictEqual(host.posted.filter((c) => c.startsWith('go ')).length, 1,
+    'and must not fire a second go while the first search runs');
+
+  host.say('bestmove g1f3'); // the stopped search answers
+  assert.ok(host.posted.includes('position fen ' + FEN_B), host.posted.join(' | '));
+  assert.strictEqual(host.posted.filter((c) => c.startsWith('go ')).length, 2);
+});
+
+test('every search still ends in a result for its own tab', () => {
+  const host = loadEngineHost();
+  host.say('uciok');
+  host.say('readyok');
+  analyze(host, 1, ITALIAN);
+  analyze(host, 2, FEN_B);
+  host.say('bestmove g1f3');
+  host.say('info depth 14 multipv 1 score cp 15 nodes 80 pv b1c3 b8c6');
+  host.say('bestmove b1c3');
+
+  const done = host.sent.filter((m) => m.status === 'done');
+  assert.strictEqual(done.length, 2);
+  assert.deepStrictEqual([...done.map((m) => m.id)], [1, 2]);
+  done.forEach((m) => assert.strictEqual(m.tabId, 5));
+});
+
+// --- what the panel says when a search goes quiet ----------------------------
+
+test('a stall names the step it is stuck on', async (t) => {
+  const context = makeContentWindow(
+    `<!doctype html><html><body>${boardHtml(ITALIAN)}</body></html>`,
+    null,
+    { url: 'https://www.chess.com/play/computer', settings: { mode: 'engine' } }
+  );
+  t.after(() => context.window.close());
+  await wait(450);
+
+  const describe = context.window.CMPStall.describe;
+  assert.match(describe(null), /không hỏi được/);
+  assert.match(describe({ document: false }), /offscreen document/);
+  assert.match(describe({ document: true, replied: false }), /không trả lời/);
+  assert.match(describe({ document: true, replied: true, bootError: 'wasm failed' }), /wasm failed/);
+  assert.match(describe({ document: true, replied: true, worker: false }), /Web Worker/);
+  assert.match(
+    describe({ document: true, replied: true, worker: true, uciok: false, lastLine: 'abort()' }),
+    /chưa nạp xong.*abort\(\)/);
+  assert.match(
+    describe({ document: true, replied: true, worker: true, uciok: true, ready: false }),
+    /readyok/);
+  assert.match(
+    describe({ document: true, replied: true, worker: true, uciok: true, ready: true, searching: 'x' }),
+    /không gửi kết quả về/);
+  assert.match(
+    describe({ document: true, replied: true, worker: true, uciok: true, ready: true }),
+    /không nhận được yêu cầu/);
+});
+
+test('the offscreen host reports where it has got to', () => {
+  const host = loadEngineHost();
+  let status = null;
+  // The host boots Stockfish as soon as it loads, so the first request does
+  // not also pay for compiling the WASM.
+  host.deliver({ target: 'offscreen', type: 'engine-status' }, (report) => { status = report; });
+  assert.strictEqual(status.worker, true, 'warmed up at load');
+  assert.strictEqual(status.ready, false, 'but not ready yet');
+
+  analyze(host, 1, ITALIAN);
+  host.deliver({ target: 'offscreen', type: 'engine-status' }, (report) => { status = report; });
+  assert.strictEqual(status.uciok, false);
+  assert.strictEqual(status.queued, ITALIAN, 'waiting on the engine, not lost');
+
+  host.say('uciok');
+  host.say('readyok');
+  host.deliver({ target: 'offscreen', type: 'engine-status' }, (report) => { status = report; });
+  assert.strictEqual(status.ready, true);
+  assert.strictEqual(status.searching, ITALIAN);
+  assert.match(status.lastLine, /readyok/);
 });

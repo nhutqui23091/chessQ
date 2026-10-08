@@ -16,9 +16,10 @@
 
   var worker = null;
   var ready = false;
-  var readyWaiters = [];
   var readyTimer = null;
   var bootError = null;
+  var sawUciok = false;
+  var lastLine = '';
   var current = null;   // the analysis in flight
   var pending = null;   // the one that should start as soon as it stops
   var optionsApplied = { multipv: 0 };
@@ -53,35 +54,13 @@
     ready = false;
     clearTimeout(readyTimer);
     readyTimer = null;
-    var waiters = readyWaiters;
-    readyWaiters = [];
-    waiters.forEach(function (waiter) { waiter.fail(message); });
     failCurrent(message);
   }
 
-  function whenReady(request, callback) {
-    if (ready) {
-      callback();
-      return;
-    }
-    if (bootError) {
-      failRequest(request, bootError);
-      return;
-    }
-    readyWaiters.push({
-      run: callback,
-      fail: function (message) { failRequest(request, message); }
-    });
-    boot();
-    if (!readyTimer) {
-      readyTimer = setTimeout(function () {
-        engineDied('Stockfish không phản hồi sau ' + (READY_TIMEOUT_MS / 1000) + ' giây');
-      }, READY_TIMEOUT_MS);
-    }
-  }
-
   function handleLine(line) {
+    lastLine = String(line).slice(0, 120);
     if (line.indexOf('uciok') === 0) {
+      sawUciok = true;
       send('setoption name Hash value 32');
       send('isready');
       return;
@@ -91,9 +70,7 @@
       bootError = null;
       clearTimeout(readyTimer);
       readyTimer = null;
-      var waiters = readyWaiters;
-      readyWaiters = [];
-      waiters.forEach(function (waiter) { waiter.run(); });
+      startPending();
       return;
     }
 
@@ -161,41 +138,71 @@
     }, function () { void chrome.runtime.lastError; });
   }
 
+  /**
+   * Starts the queued search, if the engine is free to take it.
+   *
+   * Exactly one request is ever queued and exactly one ever runs. Getting this
+   * wrong is what made the panel hang: while Stockfish compiles its WASM —
+   * seconds, on a real machine — nothing is "current", so every request that
+   * arrived in that window used to queue its own start. They then all ran at
+   * once, each overwriting the last, firing several `go` commands with no
+   * `stop` between them. Stockfish answers one of them, by then attributed to
+   * the wrong request, and every line after that arrives with nothing current
+   * and is dropped on the floor. Chess.com redraws its board several times
+   * right after load, so two or three requests inside the boot window is the
+   * ordinary case, not a rare race.
+   */
   function startPending() {
     if (!pending || current) return;
-    var next = pending;
+    if (!ready) {
+      ensureReady();
+      return;
+    }
+    var request = pending;
     pending = null;
-    run(next);
+    current = {
+      id: request.id,
+      tabId: request.tabId,
+      fen: request.fen,
+      collector: new self.CMPUci.Collector(request.lines),
+      lastProgressAt: 0
+    };
+    if (optionsApplied.multipv !== request.lines) {
+      send('setoption name MultiPV value ' + request.lines);
+      optionsApplied.multipv = request.lines;
+    }
+    send('ucinewgame');
+    send('position fen ' + request.fen);
+    send('go depth ' + request.depth);
   }
 
-  function run(request) {
-    whenReady(request, function () {
-      current = {
-        id: request.id,
-        tabId: request.tabId,
-        fen: request.fen,
-        collector: new self.CMPUci.Collector(request.lines),
-        lastProgressAt: 0
-      };
-      if (optionsApplied.multipv !== request.lines) {
-        send('setoption name MultiPV value ' + request.lines);
-        optionsApplied.multipv = request.lines;
-      }
-      send('ucinewgame');
-      send('position fen ' + request.fen);
-      send('go depth ' + request.depth);
-    });
+  /** Boots the engine if needed; startPending() runs once it answers. */
+  function ensureReady() {
+    if (ready) return;
+    if (bootError) {
+      failRequest(pending, bootError);
+      pending = null;
+      return;
+    }
+    boot();
+    if (!readyTimer) {
+      readyTimer = setTimeout(function () {
+        engineDied('Stockfish không phản hồi sau ' + (READY_TIMEOUT_MS / 1000) + ' giây');
+      }, READY_TIMEOUT_MS);
+    }
   }
 
   function analyze(request) {
+    // Only the newest position matters; one already waiting is abandoned so
+    // the tab is not left waiting on an answer that will never come.
+    if (pending) failRequest(pending, 'bỏ qua: đã có thế cờ mới hơn');
+    pending = request;
+
     if (current) {
-      // Replace whatever was queued: only the newest position matters.
-      pending = request;
-      send('stop');
+      send('stop'); // its bestmove leads back here through startPending()
       return;
     }
-    pending = null;
-    run(request);
+    startPending();
   }
 
   function stop() {
@@ -203,7 +210,7 @@
     if (current) send('stop');
   }
 
-  chrome.runtime.onMessage.addListener(function (message) {
+  chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
     if (!message || message.target !== 'offscreen') return false;
     if (message.type === 'engine-analyze') {
       analyze({
@@ -217,6 +224,17 @@
       stop();
     } else if (message.type === 'engine-ping') {
       announceReady();
+    } else if (message.type === 'engine-status') {
+      sendResponse({
+        worker: !!worker,
+        uciok: sawUciok,
+        ready: ready,
+        bootError: bootError,
+        lastLine: lastLine,
+        searching: current ? current.fen : null,
+        queued: pending ? pending.fen : null
+      });
+      return true;
     }
     return false;
   });

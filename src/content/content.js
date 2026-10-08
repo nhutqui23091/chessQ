@@ -86,13 +86,40 @@
         requestEngine(position);
         return;
       }
-      setEngine({
-        status: 'error',
-        moves: [],
-        error: 'máy phân tích không phản hồi. Thử tải lại trang, hoặc vào ' +
-          'chrome://extensions bấm Reload trên tiện ích.'
-      });
+      reportStall();
     }, ENGINE_TIMEOUT_MS);
+  }
+
+  /** Names the step the engine is stuck on, so a report says something. */
+  function describeStall(status) {
+    if (!status) return 'không hỏi được trạng thái engine';
+    if (!status.document) return 'không tạo được trang chạy engine (offscreen document)';
+    if (!status.replied) return 'trang chạy engine không trả lời';
+    if (status.bootError) return 'Stockfish lỗi: ' + status.bootError;
+    if (!status.worker) return 'chưa tạo được Web Worker cho Stockfish';
+    if (!status.uciok) return 'Stockfish chưa nạp xong (không thấy uciok)' +
+      (status.lastLine ? ' — dòng cuối: ' + status.lastLine : '');
+    if (!status.ready) return 'Stockfish nạp xong nhưng chưa sẵn sàng (không thấy readyok)';
+    if (status.searching) return 'Stockfish đang tính nhưng không gửi kết quả về';
+    return 'engine rảnh mà không nhận được yêu cầu nào';
+  }
+
+  function reportStall() {
+    var fallback = 'máy phân tích không phản hồi. Thử tải lại trang, hoặc vào ' +
+      'chrome://extensions bấm Reload trên tiện ích.';
+    try {
+      chrome.runtime.sendMessage({ type: 'engine-status' }, function (status) {
+        if (chrome.runtime.lastError) status = null;
+        setEngine({
+          status: 'error',
+          moves: [],
+          error: 'máy phân tích không phản hồi (' + describeStall(status) + '). ' +
+            'Thử tải lại trang, hoặc Reload tiện ích trong chrome://extensions.'
+        });
+      });
+    } catch (err) {
+      setEngine({ status: 'error', moves: [], error: fallback });
+    }
   }
 
   function requestEngine(position) {
@@ -359,6 +386,9 @@
     pollTimer = setInterval(sync, POLL_MS);
     scheduleSync();
   }
+
+  // Exposed for tests: a pure function with a contract worth pinning down.
+  root.CMPStall = { describe: describeStall };
 
   root.CMPSettings.load().then(start);
 })(typeof self !== 'undefined' ? self : this);

@@ -138,7 +138,7 @@ nhập thành từ vị trí vua/xe, và ô bắt tốt qua đường chỉ khi 
 
 ```bash
 npm install          # chỉ cần cho test và script build
-npm test             # 158 test: đọc thế cờ, UCI, cổng fair play, API, giao diện, manifest
+npm test             # 165 test: đọc thế cờ, UCI, cổng fair play, API, giao diện, manifest
 npm i -D playwright  # chỉ cần cho test:e2e
 npm run test:e2e     # nạp tiện ích thật vào Chromium thật, chạy Stockfish thật
 npm run icons        # tạo lại icons/*.png
@@ -179,10 +179,23 @@ test/e2e/                         test nạp tiện ích thật vào Chromium th
 
 ### Khi bảng đứng ở "Đang tính…"
 
-Không bao giờ quá 30 giây nữa: tiện ích tự thử lại một lần, rồi báo lỗi kèm
-cách khắc phục. Những đường từng làm nó treo vĩnh viễn đều đã được bịt —
-Stockfish chết lúc khởi động, service worker bị Chrome dọn giữa chừng, hay
-offscreen document biến mất. Chi tiết trong `test/engine-stall.test.js`.
+Nguyên nhân gốc: Stockfish mất vài giây nạp WASM, và Chess.com vẽ lại bàn cờ
+vài lần ngay sau khi tải trang. Mỗi yêu cầu rơi vào khoảng thời gian đó trước
+đây lại **xếp thêm một hàng chờ riêng**; khi engine sẵn sàng, tất cả chạy liền
+nhau, mỗi cái ghi đè yêu cầu trước, và nhiều lệnh `go` bắn vào Stockfish không
+có `stop` xen giữa. Kết quả bị gán nhầm chủ, rồi mọi dòng sau đó rơi vào nhánh
+"không có yêu cầu nào đang chạy" và biến mất.
+
+Giờ **chỉ một yêu cầu được xếp hàng và chỉ một được chạy**: yêu cầu mới thay
+thế yêu cầu đang chờ (và yêu cầu bị thay được báo lỗi tử tế, không bỏ rơi), còn
+nếu đang có tìm kiếm thì gửi `stop` và đợi `bestmove` rồi mới bắt đầu cái mới.
+
+Ngoài ra bảng không bao giờ chờ quá 30 giây: thử lại một lần, rồi báo lỗi **kèm
+tên bước đang kẹt** — chưa tạo được offscreen document, Stockfish chưa nạp xong
+(kèm dòng cuối engine in ra), nạp xong mà chưa sẵn sàng, hay đang tính mà không
+gửi kết quả về. Các đường chết lặng khác cũng đã bịt: service worker bị Chrome
+dọn giữa chừng, offscreen document biến mất. Chi tiết trong
+`test/engine-stall.test.js`.
 
 ### Khi Lichess từ chối yêu cầu
 

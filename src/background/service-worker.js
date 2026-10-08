@@ -364,6 +364,34 @@ async function verifyOffscreen() {
   }
 }
 
+/**
+ * Where the engine has got to. Asked for when a search goes quiet, so the
+ * panel can say which step is stuck instead of just giving up.
+ */
+async function engineStatus() {
+  var exists = false;
+  try {
+    exists = !!(chrome.offscreen.hasDocument && (await chrome.offscreen.hasDocument()));
+  } catch (err) { /* API unavailable */ }
+  if (!exists) return { document: false };
+
+  return new Promise(function (resolve) {
+    var answered = false;
+    var timer = setTimeout(function () {
+      if (!answered) resolve({ document: true, replied: false });
+    }, 2500);
+    chrome.runtime.sendMessage({ target: 'offscreen', type: 'engine-status' }, function (report) {
+      answered = true;
+      clearTimeout(timer);
+      if (chrome.runtime.lastError || !report) {
+        resolve({ document: true, replied: false });
+        return;
+      }
+      resolve(Object.assign({ document: true, replied: true }, report));
+    });
+  });
+}
+
 async function startAnalysis(message, tabId) {
   await verifyOffscreen();
   await ensureOffscreen();
@@ -443,6 +471,11 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
   if (message.type === 'explorer-ping') {
     failureCache.clear();
     pingExplorer().then(sendResponse);
+    return true;
+  }
+
+  if (message.type === 'engine-status') {
+    engineStatus().then(sendResponse);
     return true;
   }
 
