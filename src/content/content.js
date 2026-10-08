@@ -13,6 +13,13 @@
   var currentFen = null;
   var requestToken = 0;
   var engineState = { status: 'idle', moves: [], depth: 0, reason: null, error: null };
+  // A search that never answers must not leave the panel saying "Đang tính…"
+  // for the rest of the session. Depth 22 on a slow machine is a few seconds;
+  // this is far past that.
+  var ENGINE_TIMEOUT_MS = 30000;
+  var engineTimer = null;
+  var engineRetried = false;
+  var engineRequest = null;
   var boardEl = null;
   var observer = null;
   var pollTimer = null;
@@ -60,15 +67,46 @@
     return move;
   }
 
+  function clearEngineTimer() {
+    clearTimeout(engineTimer);
+    engineTimer = null;
+  }
+
+  /**
+   * Gives up on a silent engine. Anything can swallow a result — the worker
+   * dying before it registered, the service worker being torn down mid-search
+   * — and none of it produces an error on its own.
+   */
+  function armEngineTimeout(position) {
+    clearEngineTimer();
+    engineTimer = setTimeout(function () {
+      if (engineState.status !== 'thinking') return;
+      if (!engineRetried) {
+        engineRetried = true;
+        requestEngine(position);
+        return;
+      }
+      setEngine({
+        status: 'error',
+        moves: [],
+        error: 'máy phân tích không phản hồi. Thử tải lại trang, hoặc vào ' +
+          'chrome://extensions bấm Reload trên tiện ích.'
+      });
+    }, ENGINE_TIMEOUT_MS);
+  }
+
   function requestEngine(position) {
     var gate = root.CMPContext.engineStatus();
     if (!gate.allowed) {
+      clearEngineTimer();
       setEngine({
         status: 'blocked', reason: gate.reason, context: gate.context,
         moves: [], depth: 0, error: null
       });
       return;
     }
+    engineRequest = position;
+    armEngineTimeout(position);
     setEngine({
       status: 'thinking', reason: null, context: gate.context,
       moves: [], depth: 0, error: null
@@ -81,19 +119,23 @@
         lines: settings.engineLines
       }, function (response) {
         if (chrome.runtime.lastError) {
+          clearEngineTimer();
           setEngine({ status: 'error', error: chrome.runtime.lastError.message, moves: [] });
           return;
         }
         if (response && !response.ok) {
+          clearEngineTimer();
           setEngine({ status: 'error', error: response.error, moves: [] });
         }
       });
     } catch (err) {
+      clearEngineTimer();
       setEngine({ status: 'error', error: 'mất kết nối tiện ích', moves: [] });
     }
   }
 
   function stopEngine() {
+    clearEngineTimer();
     try {
       chrome.runtime.sendMessage({ type: 'analyze-stop' }, function () {
         void chrome.runtime.lastError;
@@ -208,6 +250,7 @@
       // Keep the panel's position reference fresh even though the explorer is
       // not queried in this mode.
       ui.setState({ status: 'idle', data: null, position: position, engine: engineState });
+      engineRetried = false;
       requestEngine(position);
     } else {
       requestStats(position);
@@ -278,9 +321,12 @@
       // Results for a position we have already moved on from are discarded.
       if (message.fen !== currentFen || settings.mode !== 'engine') return false;
       if (message.status === 'error') {
+        clearEngineTimer();
         setEngine({ status: 'error', error: message.error, moves: [] });
         return false;
       }
+      if (message.status === 'done') clearEngineTimer();
+      else armEngineTimeout(engineRequest);
       setEngine({
         status: message.status === 'done' ? 'ready' : 'thinking',
         moves: toSan(message.fen, message.moves || []),

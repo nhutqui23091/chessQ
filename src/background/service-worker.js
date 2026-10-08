@@ -19,6 +19,9 @@ var offscreenReady = null;
 var enginePing = null;
 // Which tab asked for which analysis, so streamed results go back to it.
 var analysisRequests = new Map();
+// Ids whose position the tab has already moved on from. Kept so the tabId
+// echoed back by the engine cannot resurrect a result we meant to drop.
+var supersededIds = new Set();
 var analysisSeq = 0;
 
 var ENDPOINTS = {
@@ -287,7 +290,15 @@ function waitForEngine() {
   if (enginePing) return enginePing;
   enginePing = new Promise(function (resolve) {
     engineReadyResolve = resolve;
-    setTimeout(resolve, 3000);
+    setTimeout(function () {
+      // Proceed anyway — the request may still land — but do not record this
+      // as a completed handshake, or the next one would skip the ping too.
+      if (engineReadyResolve) {
+        enginePing = null;
+        engineReadyResolve = null;
+      }
+      resolve();
+    }, 3000);
   });
   chrome.runtime.sendMessage({ target: 'offscreen', type: 'engine-ping' }, function () {
     void chrome.runtime.lastError;
@@ -333,11 +344,37 @@ function ensureOffscreen() {
   return offscreenReady;
 }
 
+/**
+ * Drops the cached handshake if the offscreen document is no longer there.
+ * Without this, a document that went away once leaves every later request
+ * going nowhere, with nothing to say so.
+ */
+async function verifyOffscreen() {
+  if (!offscreenReady) return;
+  try {
+    if (chrome.offscreen.hasDocument && !(await chrome.offscreen.hasDocument())) {
+      offscreenReady = null;
+      enginePing = null;
+      engineReadyResolve = null;
+    }
+  } catch (err) {
+    offscreenReady = null;
+    enginePing = null;
+    engineReadyResolve = null;
+  }
+}
+
 async function startAnalysis(message, tabId) {
+  await verifyOffscreen();
   await ensureOffscreen();
-  // Only the newest position per tab is worth computing.
-  for (var [id, entry] of analysisRequests) {
-    if (entry.tabId === tabId) analysisRequests.delete(id);
+  // Only the newest position per tab is worth reporting.
+  for (var [old, entry] of analysisRequests) {
+    if (entry.tabId !== tabId) continue;
+    analysisRequests.delete(old);
+    supersededIds.add(old);
+  }
+  while (supersededIds.size > 50) {
+    supersededIds.delete(supersededIds.values().next().value);
   }
   var id = ++analysisSeq;
   analysisRequests.set(id, { tabId: tabId, fen: message.fen });
@@ -345,6 +382,11 @@ async function startAnalysis(message, tabId) {
     target: 'offscreen',
     type: 'engine-analyze',
     id: id,
+    // The tab travels with the request and comes back on the result. This
+    // worker is torn down after half a minute idle, taking any bookkeeping
+    // with it; a result arriving after that would otherwise have nowhere to
+    // go, and the tab would wait for an answer that never came.
+    tabId: tabId,
     fen: message.fen,
     depth: message.depth,
     lines: message.lines
@@ -353,10 +395,15 @@ async function startAnalysis(message, tabId) {
 }
 
 function routeEngineResult(message) {
+  if (supersededIds.has(message.id)) {
+    if (message.status !== 'progress') supersededIds.delete(message.id);
+    return;
+  }
   var entry = analysisRequests.get(message.id);
-  if (!entry) return; // superseded by a newer position
-  if (message.status !== 'progress') analysisRequests.delete(message.id);
-  chrome.tabs.sendMessage(entry.tabId, {
+  var tabId = (entry && entry.tabId) != null ? entry.tabId : message.tabId;
+  if (tabId == null) return;
+  if (entry && message.status !== 'progress') analysisRequests.delete(message.id);
+  chrome.tabs.sendMessage(tabId, {
     type: 'analysis',
     id: message.id,
     fen: message.fen,

@@ -138,7 +138,7 @@ nhập thành từ vị trí vua/xe, và ô bắt tốt qua đường chỉ khi 
 
 ```bash
 npm install          # chỉ cần cho test và script build
-npm test             # 151 test: đọc thế cờ, UCI, cổng fair play, API, giao diện, manifest
+npm test             # 158 test: đọc thế cờ, UCI, cổng fair play, API, giao diện, manifest
 npm i -D playwright  # chỉ cần cho test:e2e
 npm run test:e2e     # nạp tiện ích thật vào Chromium thật, chạy Stockfish thật
 npm run icons        # tạo lại icons/*.png
@@ -176,6 +176,13 @@ tools/                            sinh icon, đóng gói .zip
 test/                             test chạy bằng node:test + jsdom
 test/e2e/                         test nạp tiện ích thật vào Chromium thật
 ```
+
+### Khi bảng đứng ở "Đang tính…"
+
+Không bao giờ quá 30 giây nữa: tiện ích tự thử lại một lần, rồi báo lỗi kèm
+cách khắc phục. Những đường từng làm nó treo vĩnh viễn đều đã được bịt —
+Stockfish chết lúc khởi động, service worker bị Chrome dọn giữa chừng, hay
+offscreen document biến mất. Chi tiết trong `test/engine-stall.test.js`.
 
 ### Khi Lichess từ chối yêu cầu
 

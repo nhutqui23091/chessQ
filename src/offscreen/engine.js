@@ -10,10 +10,15 @@
 
   var ENGINE_URL = '../vendor/stockfish/stockfish.wasm.js';
   var PROGRESS_INTERVAL_MS = 220;
+  // Compiling half a megabyte of WASM is slow on a cold, busy machine, but it
+  // is not minutes. Past this, the engine is not coming.
+  var READY_TIMEOUT_MS = 25000;
 
   var worker = null;
   var ready = false;
   var readyWaiters = [];
+  var readyTimer = null;
+  var bootError = null;
   var current = null;   // the analysis in flight
   var pending = null;   // the one that should start as soon as it stops
   var optionsApplied = { multipv: 0 };
@@ -24,23 +29,55 @@
 
   function boot() {
     if (worker) return;
-    worker = new Worker(ENGINE_URL);
+    try {
+      worker = new Worker(ENGINE_URL);
+    } catch (err) {
+      // Nobody is waiting yet at first boot, so remember why: the next request
+      // can be refused immediately instead of waiting for a ready that will
+      // never come.
+      engineDied('không tạo được Web Worker: ' + (err && err.message ? err.message : err));
+      return;
+    }
     worker.onmessage = function (event) {
       handleLine(typeof event.data === 'string' ? event.data : String(event.data));
     };
     worker.onerror = function (event) {
-      failCurrent('engine error: ' + (event.message || 'không khởi động được Stockfish'));
+      engineDied(event && event.message ? event.message : 'Stockfish lỗi khi khởi động');
     };
     send('uci');
   }
 
-  function whenReady(callback) {
+  /** The engine is not going to answer: tell everyone waiting, and remember. */
+  function engineDied(message) {
+    bootError = message;
+    ready = false;
+    clearTimeout(readyTimer);
+    readyTimer = null;
+    var waiters = readyWaiters;
+    readyWaiters = [];
+    waiters.forEach(function (waiter) { waiter.fail(message); });
+    failCurrent(message);
+  }
+
+  function whenReady(request, callback) {
     if (ready) {
       callback();
       return;
     }
-    readyWaiters.push(callback);
+    if (bootError) {
+      failRequest(request, bootError);
+      return;
+    }
+    readyWaiters.push({
+      run: callback,
+      fail: function (message) { failRequest(request, message); }
+    });
     boot();
+    if (!readyTimer) {
+      readyTimer = setTimeout(function () {
+        engineDied('Stockfish không phản hồi sau ' + (READY_TIMEOUT_MS / 1000) + ' giây');
+      }, READY_TIMEOUT_MS);
+    }
   }
 
   function handleLine(line) {
@@ -51,9 +88,12 @@
     }
     if (line.indexOf('readyok') === 0) {
       ready = true;
+      bootError = null;
+      clearTimeout(readyTimer);
+      readyTimer = null;
       var waiters = readyWaiters;
       readyWaiters = [];
-      waiters.forEach(function (callback) { callback(); });
+      waiters.forEach(function (waiter) { waiter.run(); });
       return;
     }
 
@@ -81,6 +121,7 @@
       type: 'engine-result',
       target: 'background',
       id: analysis.id,
+      tabId: analysis.tabId,
       fen: analysis.fen,
       status: status,
       depth: result.depth,
@@ -100,17 +141,24 @@
   function failCurrent(message) {
     var analysis = current;
     current = null;
-    if (analysis) {
-      chrome.runtime.sendMessage({
-        type: 'engine-result',
-        target: 'background',
-        id: analysis.id,
-        fen: analysis.fen,
-        status: 'error',
-        error: message
-      });
-    }
-    startPending();
+    if (analysis) failRequest(analysis, message);
+    var queued = pending;
+    pending = null;
+    if (queued) failRequest(queued, message);
+  }
+
+  /** Reports a request as failed, whether it ever started or not. */
+  function failRequest(request, message) {
+    if (!request) return;
+    chrome.runtime.sendMessage({
+      type: 'engine-result',
+      target: 'background',
+      id: request.id,
+      tabId: request.tabId,
+      fen: request.fen,
+      status: 'error',
+      error: message
+    }, function () { void chrome.runtime.lastError; });
   }
 
   function startPending() {
@@ -121,9 +169,10 @@
   }
 
   function run(request) {
-    whenReady(function () {
+    whenReady(request, function () {
       current = {
         id: request.id,
+        tabId: request.tabId,
         fen: request.fen,
         collector: new self.CMPUci.Collector(request.lines),
         lastProgressAt: 0
@@ -159,6 +208,7 @@
     if (message.type === 'engine-analyze') {
       analyze({
         id: message.id,
+        tabId: message.tabId,
         fen: message.fen,
         depth: Math.max(6, Math.min(24, message.depth || 14)),
         lines: Math.max(1, Math.min(8, message.lines || 4))
