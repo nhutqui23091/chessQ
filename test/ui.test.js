@@ -142,7 +142,7 @@ test('a 401 is explained, not just numbered', (t) => {
   assert.match(text, /Lichess từ chối/);
   assert.match(text, /401/);
   assert.match(text, /token required/, 'the server reason reaches the user');
-  assert.match(text, /kiện tướng|VPN/, 'and something to try');
+  assert.match(text, /Kiểm tra kết nối/, 'and points at the check that answers it');
 });
 
 test('rate limiting and network loss read differently', (t) => {

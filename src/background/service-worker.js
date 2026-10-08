@@ -31,6 +31,10 @@ var MIN_REQUEST_GAP_MS = 350;
 var MAX_RETRIES = 2;
 
 var cache = new Map();
+// Whoever refused the last request, and when. A blocked host would otherwise
+// be hammered with three requests on every single move.
+var failureCache = new Map();
+var FAILURE_TTL_MS = 60000;
 var inFlight = new Map();
 var lastRequestAt = 0;
 
@@ -179,10 +183,54 @@ function shape(raw) {
 // with the filters removed.
 var REFUSED = [400, 401, 403, 404, 422];
 
+/**
+ * Checks who is actually answering for the explorer.
+ *
+ * A user saw "401 Authorization Required ... nginx" — nginx's own error page,
+ * which is not how Lichess reports anything, so something between the browser
+ * and Lichess was answering. Nothing in a status code says that; the final
+ * URL, the server header and a WWW-Authenticate challenge do.
+ */
+async function pingExplorer() {
+  var url = ENDPOINTS.lichess +
+    '?fen=' + encodeURIComponent('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
+  var started = Date.now();
+  try {
+    var response = await fetch(url, { credentials: 'omit', cache: 'no-store' });
+    var body = (await response.text()).slice(0, 200).replace(/\s+/g, ' ').trim();
+    return {
+      ok: response.ok,
+      requested: url,
+      finalUrl: response.url,
+      redirected: response.redirected,
+      status: response.status,
+      statusText: response.statusText,
+      server: response.headers.get('server') || '',
+      contentType: response.headers.get('content-type') || '',
+      challenge: response.headers.get('www-authenticate') || '',
+      body: body,
+      ms: Date.now() - started
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      requested: url,
+      networkError: err && err.message ? err.message : String(err),
+      ms: Date.now() - started
+    };
+  }
+}
+
 async function lookup(fen, settings) {
   var url = buildUrl(fen, settings);
   var cached = cacheGet(url);
   if (cached) return { ok: true, data: cached, cached: true };
+
+  // The same host just refused us; do not ask again for every move.
+  var recent = failureCache.get(ENDPOINTS.lichess);
+  if (recent && Date.now() - recent.at < FAILURE_TTL_MS) {
+    return { ok: false, error: recent.error, alsoFailed: recent.alsoFailed, throttled: true };
+  }
 
   if (inFlight.has(url)) return inFlight.get(url);
 
@@ -190,12 +238,15 @@ async function lookup(fen, settings) {
     .then(function (raw) {
       var data = shape(raw);
       cacheSet(url, data);
+      failureCache.delete(ENDPOINTS.lichess);
       return { ok: true, data: data, cached: false };
     })
     .catch(async function (err) {
       var bare = buildUrl(fen, settings, true);
       if (REFUSED.indexOf(err && err.status) === -1 || bare === url) {
-        return { ok: false, error: err && err.message ? err.message : String(err) };
+        var message = err && err.message ? err.message : String(err);
+        failureCache.set(ENDPOINTS.lichess, { at: Date.now(), error: message });
+        return { ok: false, error: message };
       }
       try {
         var raw = await fetchExplorer(bare);
@@ -204,11 +255,15 @@ async function lookup(fen, settings) {
         // The caller is told the filters did not survive, so the panel can say so.
         return { ok: true, data: data, cached: false, degraded: true, reason: err.message };
       } catch (second) {
-        return {
+        var failure = {
           ok: false,
           error: err.message,
           alsoFailed: second && second.message ? second.message : String(second)
         };
+        failureCache.set(ENDPOINTS.lichess, {
+          at: Date.now(), error: failure.error, alsoFailed: failure.alsoFailed
+        });
+        return failure;
       }
     })
     .finally(function () {
@@ -335,6 +390,12 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
       .catch(function (err) {
         sendResponse({ ok: false, error: err && err.message ? err.message : String(err) });
       });
+    return true;
+  }
+
+  if (message.type === 'explorer-ping') {
+    failureCache.clear();
+    pingExplorer().then(sendResponse);
     return true;
   }
 

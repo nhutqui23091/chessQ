@@ -138,7 +138,7 @@ nhập thành từ vị trí vua/xe, và ô bắt tốt qua đường chỉ khi 
 
 ```bash
 npm install          # chỉ cần cho test và script build
-npm test             # 146 test: đọc thế cờ, UCI, cổng fair play, API, giao diện, manifest
+npm test             # 151 test: đọc thế cờ, UCI, cổng fair play, API, giao diện, manifest
 npm i -D playwright  # chỉ cần cho test:e2e
 npm run test:e2e     # nạp tiện ích thật vào Chromium thật, chạy Stockfish thật
 npm run icons        # tạo lại icons/*.png
@@ -179,11 +179,26 @@ test/e2e/                         test nạp tiện ích thật vào Chromium th
 
 ### Khi Lichess từ chối yêu cầu
 
-Nếu bảng báo *"Lichess từ chối yêu cầu (401/403)"*, tiện ích đã tự thử lại một
-lần với truy vấn trần (chỉ còn thế cờ, bỏ hết bộ lọc thể loại/Elo). Nếu lần đó
-chạy được thì vẫn hiện thống kê và ghi "không áp dụng được bộ lọc". Nếu vẫn
-hỏng, thông báo sẽ kèm **nguyên văn lý do server trả về** — đó là thứ cần để
-biết là mạng chặn, VPN, DNS lọc quảng cáo, hay Lichess đổi API.
+Bấm **⚙ → "Kiểm tra kết nối Lichess"**. Nó gọi thẳng API và báo lại **ai đã trả
+lời**: URL cuối sau chuyển hướng, header `server`, có đòi xác thực không, và
+nội dung trang lỗi. Mã lỗi không phân biệt được Lichess với thứ đứng chặn giữa
+đường; những thông tin đó thì có.
+
+Nếu trang lỗi do nginx/apache/proxy sinh ra, hoặc request bị chuyển hướng đi nơi
+khác, tiện ích kết luận thẳng: **đây không phải lỗi của Lichess** — proxy, VPN,
+DNS lọc hay tiện ích khác đang chặn `explorer.lichess.ovh`. Tên miền `.ovh` hay
+bị các danh sách lọc chặn cả cụm vì dính nhiều spam, nên thủ phạm thường là
+trình chặn quảng cáo hoặc DNS lọc. Cách thử nhanh không cần tiện ích: mở
+`https://explorer.lichess.ovh/masters?fen=...` thẳng trong tab mới — ra cùng
+trang lỗi tức là máy/mạng chặn.
+
+Trước khi báo lỗi, tiện ích còn tự thử lại một lần với truy vấn trần (chỉ còn
+thế cờ, bỏ hết bộ lọc). Nếu lần đó chạy thì vẫn hiện thống kê, kèm ghi chú
+"không áp dụng được bộ lọc". Khi một host đã từ chối, nó nghỉ 60 giây thay vì
+bắn lại mỗi nước đi.
+
+**Chế độ Máy không cần mạng** — Stockfish chạy ngay trong trình duyệt, nên nó
+vẫn hoạt động đầy đủ kể cả khi Lichess bị chặn.
 
 ### Khi Chess.com đổi giao diện
 

@@ -248,6 +248,19 @@
     });
     styleRow.appendChild(styleChips);
 
+    var checkRow = h('div', 'cmp-field cmp-explorer-only');
+    checkRow.appendChild(h('div', 'cmp-field-label', 'Sự cố kết nối'));
+    var checkButton = h('button', 'cmp-diag-copy', 'Kiểm tra kết nối Lichess');
+    checkButton.addEventListener('click', function () {
+      checkButton.disabled = true;
+      checkButton.textContent = 'Đang kiểm tra…';
+      self.runConnectionCheck(function () {
+        checkButton.disabled = false;
+        checkButton.textContent = 'Kiểm tra lại';
+      });
+    });
+    checkRow.appendChild(checkButton);
+
     var badgeRow = h('label', 'cmp-field cmp-check');
     var badgeToggle = h('input');
     badgeToggle.type = 'checkbox';
@@ -260,6 +273,7 @@
     box.appendChild(dbRow);
     box.appendChild(speedRow);
     box.appendChild(ratingRow);
+    box.appendChild(checkRow);
     box.appendChild(styleRow);
     box.appendChild(depthRow);
     box.appendChild(linesRow);
@@ -339,6 +353,59 @@
     }
   };
 
+  /**
+   * Asks the worker who answers for the explorer, and shows the answer. A
+   * status code cannot tell Lichess apart from something intercepting the
+   * request; the final URL and the server header can.
+   */
+  UI.prototype.runConnectionCheck = function (done) {
+    var self = this;
+    this.panel.classList.add('cmp-settings-open');
+    try {
+      chrome.runtime.sendMessage({ type: 'explorer-ping' }, function (report) {
+        if (chrome.runtime.lastError || !report) {
+          report = { ok: false, networkError: 'không nhận được phản hồi từ tiện ích' };
+        }
+        self.connectionReport = report;
+        self.render();
+        if (done) done();
+      });
+    } catch (err) {
+      this.connectionReport = { ok: false, networkError: 'mất kết nối tiện ích' };
+      this.render();
+      if (done) done();
+    }
+  };
+
+  function describeReport(report) {
+    if (report.networkError) {
+      return ['KHÔNG KẾT NỐI ĐƯỢC',
+        'lỗi: ' + report.networkError,
+        'Thường là tường lửa, VPN, hoặc DNS chặn tên miền explorer.lichess.ovh.'];
+    }
+    var lines = [
+      (report.ok ? 'OK — Lichess trả lời bình thường' : 'BỊ TỪ CHỐI (' + report.status + ')'),
+      'gửi tới : ' + report.requested.split('?')[0],
+      'trả lời : ' + (report.finalUrl || '').split('?')[0] + (report.redirected ? '  (ĐÃ BỊ CHUYỂN HƯỚNG)' : ''),
+      'server  : ' + (report.server || '(không có)'),
+      'kiểu    : ' + (report.contentType || '(không có)'),
+      report.challenge ? 'đòi xác thực: ' + report.challenge : '',
+      report.body ? 'nội dung: ' + report.body : '',
+      'thời gian: ' + report.ms + 'ms'
+    ].filter(Boolean);
+
+    if (!report.ok) {
+      var intercepted = report.redirected ||
+        /nginx|apache|squid|envoy/i.test(report.server || '') ||
+        /nginx|apache|squid|proxy/i.test(report.body || '');
+      lines.push(intercepted
+        ? 'KẾT LUẬN: trang lỗi này không phải của Lichess — có proxy, VPN, DNS lọc ' +
+          'hoặc tiện ích khác đang chặn. Hãy cho explorer.lichess.ovh vào danh sách trắng.'
+        : 'KẾT LUẬN: Lichess từ chối yêu cầu. Gửi dòng trên cho người sửa.');
+    }
+    return lines;
+  }
+
   UI.prototype.emit = function (patch) {
     if (this.callbacks.onSettingsChange) this.callbacks.onSettingsChange(patch);
   };
@@ -403,6 +470,36 @@
     var box = this.els.diagnosis;
     var info = this.state.diagnosis;
     box.textContent = '';
+
+    // A connection report takes precedence: the user just asked for it.
+    if (this.connectionReport) {
+      box.style.display = '';
+      var report = this.connectionReport;
+      box.classList.toggle('cmp-diagnosis-ok', !!report.ok);
+      box.appendChild(h('div', 'cmp-diag-title', 'Kiểm tra kết nối Lichess'));
+      box.appendChild(h('div', 'cmp-diag-body', describeReport(report).join('\n')));
+      var copyReport = h('button', 'cmp-diag-copy', 'Sao chép');
+      copyReport.addEventListener('click', function () {
+        try {
+          navigator.clipboard.writeText(JSON.stringify(report, null, 2)).then(function () {
+            copyReport.textContent = 'Đã chép';
+          });
+        } catch (err) {
+          copyReport.textContent = 'Không chép được';
+        }
+      });
+      var dismiss = h('button', 'cmp-diag-copy', 'Đóng');
+      dismiss.addEventListener('click', function () {
+        self2.connectionReport = null;
+        self2.render();
+      });
+      var self2 = this;
+      box.appendChild(copyReport);
+      box.appendChild(dismiss);
+      return;
+    }
+    box.classList.remove('cmp-diagnosis-ok');
+
     if (this.state.status !== 'no-board' || !info) {
       box.style.display = 'none';
       return;
@@ -850,8 +947,7 @@
     if (status === 401 || status === 403) {
       return 'Lichess từ chối yêu cầu (' + status + ')' +
         (detail ? ': ' + detail : '') +
-        '. Thường là do mạng hoặc tiện ích khác chặn; thử đổi sang nguồn ' +
-        '"Ván của kiện tướng" trong ⚙, hoặc tắt VPN/DNS chặn quảng cáo.';
+        '. Mở ⚙ → "Kiểm tra kết nối Lichess" để biết ai đang chặn.';
     }
     if (status === 429) {
       return 'Lichess đang giới hạn tốc độ. Chờ một lát rồi thử lại.';

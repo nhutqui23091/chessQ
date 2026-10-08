@@ -373,6 +373,9 @@
   cursor: pointer;
 }
 .cmp-diag-copy:hover { border-color: var(--cmp-green); }
+.cmp-diag-copy + .cmp-diag-copy { margin-left: 6px; }
+.cmp-diag-copy[disabled] { opacity: 0.6; cursor: default; }
+.cmp-diagnosis-ok { border-color: var(--cmp-best); background: rgba(127, 166, 80, 0.14); }
 
 .cmp-status {
   margin-top: 6px;
