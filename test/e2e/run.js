@@ -185,6 +185,37 @@ async function main() {
       !!aligned && aligned.dx < 2 && aligned.dy < 2 && aligned.dw < 2,
       aligned ? `lệch ${aligned.dx.toFixed(1)}px/${aligned.dy.toFixed(1)}px, rộng lệch ${aligned.dw.toFixed(1)}px` : 'no overlay');
 
+    // A second game in the same tab, after a pause. Chess.com never reloads the
+    // page, and MV3 tears the service worker down after about thirty seconds
+    // idle — which is roughly how long it takes to read a result and click
+    // "new game". The reported symptom is that game one works and game two
+    // sits on "Đang tính…", so the pause is the part worth reproducing.
+    if (process.env.CMP_SKIP_IDLE !== '1') {
+      console.log('      (chờ 45 giây để service worker bị dọn…)');
+      await wait(45000);
+    }
+    await opaque.evaluate(() => {
+      window.newGame([
+        { text: 'd4' }, { text: 'f5' },
+        { text: 'c4' }, { text: 'f6', piece: 1 }
+      ]);
+    });
+    const secondGame = await waitFor(opaque, () => {
+      const rows = document.querySelectorAll('.cmp-row-eng:not(.cmp-row-head)');
+      const status = document.querySelector('.cmp-status');
+      if (!rows.length) {
+        return status && status.textContent && !/Đang tính/.test(status.textContent)
+          ? { stuck: status.textContent }
+          : null;
+      }
+      return { rows: rows.length, first: rows[0].querySelector('.cmp-c-san').textContent };
+    }, 40000);
+    check('a second game in the same tab is analysed too',
+      !!secondGame && !secondGame.stuck,
+      secondGame
+        ? (secondGame.stuck || `${secondGame.rows} nước, tốt nhất ${secondGame.first}`)
+        : 'vẫn đứng ở "Đang tính…"');
+
     await opaque.close();
     void started;
 

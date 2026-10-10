@@ -138,7 +138,7 @@ nhập thành từ vị trí vua/xe, và ô bắt tốt qua đường chỉ khi 
 
 ```bash
 npm install          # chỉ cần cho test và script build
-npm test             # 165 test: đọc thế cờ, UCI, cổng fair play, API, giao diện, manifest
+npm test             # 170 test: đọc thế cờ, UCI, cổng fair play, API, giao diện, manifest
 npm i -D playwright  # chỉ cần cho test:e2e
 npm run test:e2e     # nạp tiện ích thật vào Chromium thật, chạy Stockfish thật
 npm run icons        # tạo lại icons/*.png
@@ -190,7 +190,12 @@ Giờ **chỉ một yêu cầu được xếp hàng và chỉ một được ch�
 thế yêu cầu đang chờ (và yêu cầu bị thay được báo lỗi tử tế, không bỏ rơi), còn
 nếu đang có tìm kiếm thì gửi `stop` và đợi `bestmove` rồi mới bắt đầu cái mới.
 
-Ngoài ra bảng không bao giờ chờ quá 30 giây: thử lại một lần, rồi báo lỗi **kèm
+Nếu vẫn treo: **⚙ → "Kiểm tra máy phân tích"** báo ngay engine đang kẹt ở bước
+nào — có trang chạy engine chưa, nó có trả lời không, Web Worker đã tạo chưa,
+đã nhận `uciok`/`readyok` chưa (kèm dòng cuối Stockfish in ra), đang tính thế
+cờ nào, đang chờ thế cờ nào.
+
+Ngoài ra bảng không bao giờ chờ quá 12 giây: thử lại một lần, rồi báo lỗi **kèm
 tên bước đang kẹt** — chưa tạo được offscreen document, Stockfish chưa nạp xong
 (kèm dòng cuối engine in ra), nạp xong mà chưa sẵn sàng, hay đang tính mà không
 gửi kết quả về. Các đường chết lặng khác cũng đã bịt: service worker bị Chrome

@@ -287,3 +287,10 @@ test('the best move in a balanced position keeps its green', (t) => {
   assert.ok(chip.classList.contains('cmp-eval-best'));
   assert.ok(chip.classList.contains('cmp-eval-top'));
 });
+
+test('a finished position says so instead of going blank', (t) => {
+  const over = Object.assign({}, ENGINE, { status: 'ready', moves: [] });
+  const { window } = setup(t, over);
+  assert.match(window.document.querySelector('.cmp-status').textContent,
+    /đã kết thúc — không còn nước đi/);
+});

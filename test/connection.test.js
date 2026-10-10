@@ -77,3 +77,54 @@ test('a host that cannot be reached at all reports the network error', (t) => {
   assert.match(box.textContent, /KHÔNG KẾT NỐI ĐƯỢC/);
   assert.match(box.textContent, /DNS chặn/);
 });
+
+// --- the engine check -------------------------------------------------------
+
+function engineReport(t, status) {
+  const window = makeUiWindow('<!doctype html><html><body></body></html>');
+  const ui = new window.CMPUI({ onSettingsChange: () => {} });
+  ui.setSettings(window.CMPSettings.normalize({ mode: 'engine' }));
+  ui.setState({ status: 'idle', data: null, position: null, engine: { status: 'idle', moves: [] } });
+  ui.connectionReport = { engine: status };
+  ui.render();
+  t.after(() => { ui.destroy(); window.close(); });
+  return window.document.querySelector('.cmp-diagnosis');
+}
+
+test('a healthy idle engine says so', (t) => {
+  const box = engineReport(t, {
+    document: true, replied: true, worker: true, uciok: true, ready: true,
+    lastLine: 'readyok', searching: null, queued: null
+  });
+  assert.match(box.textContent, /sẵn sàng \(readyok\): rồi/);
+  assert.match(box.textContent, /engine rảnh và khoẻ/);
+  assert.ok(box.classList.contains('cmp-diagnosis-ok'));
+});
+
+test('an engine still loading is named as such', (t) => {
+  const box = engineReport(t, {
+    document: true, replied: true, worker: true, uciok: false, ready: false,
+    lastLine: 'Stockfish 10 64', queued: 'some fen'
+  });
+  assert.match(box.textContent, /uciok\s+: CHƯA/);
+  assert.match(box.textContent, /chưa nạp xong/);
+  assert.match(box.textContent, /Stockfish 10 64/);
+  assert.ok(!box.classList.contains('cmp-diagnosis-ok'));
+});
+
+test('a missing or mute engine page is named', (t) => {
+  assert.match(engineReport(t, { document: false }).textContent,
+    /không tạo được trang chạy engine/);
+  assert.match(engineReport(t, { document: true, replied: false }).textContent,
+    /trang chạy engine treo/);
+  assert.match(engineReport(t, { unreachable: true }).textContent,
+    /KHÔNG HỎI ĐƯỢC TIỆN ÍCH/);
+});
+
+test('a boot failure is shown verbatim', (t) => {
+  const box = engineReport(t, {
+    document: true, replied: true, worker: true, uciok: false, ready: false,
+    bootError: 'CompileError: wasm validation'
+  });
+  assert.match(box.textContent, /CompileError: wasm validation/);
+});

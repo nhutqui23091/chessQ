@@ -14,9 +14,10 @@
   var requestToken = 0;
   var engineState = { status: 'idle', moves: [], depth: 0, reason: null, error: null };
   // A search that never answers must not leave the panel saying "Đang tính…"
-  // for the rest of the session. Depth 22 on a slow machine is a few seconds;
-  // this is far past that.
-  var ENGINE_TIMEOUT_MS = 30000;
+  // for the rest of the session. Depth 22 on a slow machine is a few seconds,
+  // so this is already generous — and waiting half a minute to be told
+  // something went wrong is its own small cruelty.
+  var ENGINE_TIMEOUT_MS = 12000;
   var engineTimer = null;
   var engineRetried = false;
   var engineRequest = null;

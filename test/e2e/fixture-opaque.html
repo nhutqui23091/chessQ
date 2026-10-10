@@ -80,6 +80,22 @@ setMoves([
   { text: 'xc6', piece: 1 }, { text: 'bxc6' }
 ]);
 
+// Starts a fresh game the way the single-page app does: the move list is
+// emptied, the result disappears, the live controls come back. The page never
+// reloads, so the extension keeps all of its state from the previous game.
+window.newGame = function (moves) {
+  var over = document.querySelector('.game-over-modal-content');
+  if (over) over.remove();
+  if (!document.getElementById('live-controls')) {
+    var controls = document.createElement('div');
+    controls.className = 'live-game-buttons-component';
+    controls.id = 'live-controls';
+    controls.innerHTML = '<button data-cy="resign-button">Đầu hàng</button>';
+    document.querySelector('.side').appendChild(controls);
+  }
+  setMoves(moves || []);
+};
+
 // Ends the game the way the page does: the live controls go, a result appears.
 window.endGame = function () {
   document.getElementById('live-controls').remove();

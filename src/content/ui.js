@@ -261,6 +261,19 @@
     });
     checkRow.appendChild(checkButton);
 
+    var engineCheckRow = h('div', 'cmp-field cmp-engine-only');
+    engineCheckRow.appendChild(h('div', 'cmp-field-label', 'Sự cố máy phân tích'));
+    var engineButton = h('button', 'cmp-diag-copy', 'Kiểm tra máy phân tích');
+    engineButton.addEventListener('click', function () {
+      engineButton.disabled = true;
+      engineButton.textContent = 'Đang kiểm tra…';
+      self.runEngineCheck(function () {
+        engineButton.disabled = false;
+        engineButton.textContent = 'Kiểm tra lại';
+      });
+    });
+    engineCheckRow.appendChild(engineButton);
+
     var badgeRow = h('label', 'cmp-field cmp-check');
     var badgeToggle = h('input');
     badgeToggle.type = 'checkbox';
@@ -274,6 +287,7 @@
     box.appendChild(speedRow);
     box.appendChild(ratingRow);
     box.appendChild(checkRow);
+    box.appendChild(engineCheckRow);
     box.appendChild(styleRow);
     box.appendChild(depthRow);
     box.appendChild(linesRow);
@@ -377,6 +391,54 @@
     }
   };
 
+  /** Asks the worker where the engine has got to, and shows it. */
+  UI.prototype.runEngineCheck = function (done) {
+    var self = this;
+    this.panel.classList.add('cmp-settings-open');
+    try {
+      chrome.runtime.sendMessage({ type: 'engine-status' }, function (status) {
+        if (chrome.runtime.lastError || !status) status = null;
+        self.connectionReport = { engine: status || { unreachable: true } };
+        self.render();
+        if (done) done();
+      });
+    } catch (err) {
+      this.connectionReport = { engine: { unreachable: true } };
+      this.render();
+      if (done) done();
+    }
+  };
+
+  function describeEngine(status) {
+    if (!status || status.unreachable) {
+      return ['KHÔNG HỎI ĐƯỢC TIỆN ÍCH',
+        'Thử tải lại trang, hoặc Reload tiện ích trong chrome://extensions.'];
+    }
+    var lines = [
+      'trang chạy engine : ' + (status.document ? 'có' : 'KHÔNG CÓ'),
+      'trả lời           : ' + (status.replied ? 'có' : 'KHÔNG'),
+      'Web Worker        : ' + (status.worker ? 'có' : 'chưa tạo'),
+      'uciok             : ' + (status.uciok ? 'đã nhận' : 'CHƯA'),
+      'sẵn sàng (readyok): ' + (status.ready ? 'rồi' : 'CHƯA'),
+      status.bootError ? 'lỗi khởi động     : ' + status.bootError : '',
+      status.lastLine ? 'dòng cuối engine  : ' + status.lastLine : '',
+      'đang tính         : ' + (status.searching || '(không)'),
+      'đang chờ          : ' + (status.queued || '(không)')
+    ].filter(Boolean);
+
+    if (status.ready && !status.searching && !status.queued) {
+      lines.push('KẾT LUẬN: engine rảnh và khoẻ. Nếu bảng vẫn "Đang tính…" thì ' +
+        'yêu cầu không tới được engine — Reload tiện ích.');
+    } else if (!status.document) {
+      lines.push('KẾT LUẬN: không tạo được trang chạy engine. Reload tiện ích.');
+    } else if (!status.replied) {
+      lines.push('KẾT LUẬN: trang chạy engine treo. Reload tiện ích.');
+    } else if (!status.uciok) {
+      lines.push('KẾT LUẬN: Stockfish chưa nạp xong — có thể bị chặn hoặc máy quá chậm.');
+    }
+    return lines;
+  }
+
   function describeReport(report) {
     if (report.networkError) {
       return ['KHÔNG KẾT NỐI ĐƯỢC',
@@ -475,9 +537,13 @@
     if (this.connectionReport) {
       box.style.display = '';
       var report = this.connectionReport;
-      box.classList.toggle('cmp-diagnosis-ok', !!report.ok);
-      box.appendChild(h('div', 'cmp-diag-title', 'Kiểm tra kết nối Lichess'));
-      box.appendChild(h('div', 'cmp-diag-body', describeReport(report).join('\n')));
+      box.classList.toggle('cmp-diagnosis-ok',
+        report.engine ? !!(report.engine.ready && !report.engine.bootError) : !!report.ok);
+      var isEngine = Object.prototype.hasOwnProperty.call(report, 'engine');
+      box.appendChild(h('div', 'cmp-diag-title',
+        isEngine ? 'Kiểm tra máy phân tích' : 'Kiểm tra kết nối Lichess'));
+      box.appendChild(h('div', 'cmp-diag-body',
+        (isEngine ? describeEngine(report.engine) : describeReport(report)).join('\n')));
       var copyReport = h('button', 'cmp-diag-copy', 'Sao chép');
       copyReport.addEventListener('click', function () {
         try {
@@ -864,6 +930,10 @@
       statusText = 'Lỗi máy phân tích: ' + (engine.error || 'không rõ');
     } else if (engine.status === 'thinking' && !moves.length) {
       statusText = 'Đang tính…';
+    } else if (engine.status === 'ready' && !moves.length) {
+      // Stockfish returns no moves for a finished position; without this the
+      // panel just went blank.
+      statusText = 'Thế cờ đã kết thúc — không còn nước đi nào.';
     } else if (this.state.status === 'no-board') {
       this.panel.classList.toggle('cmp-boardless', this.boardlessHidden());
       if (!this.state.diagnosis) statusText = 'Trang này không có bàn cờ. Mở một ván cờ để bắt đầu.';
